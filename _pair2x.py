@@ -204,3 +204,9 @@ try:
 except Exception as e:
     print("card post:", e)
 
+
+# 10/10: refresh the cloud alert watch list (open bets + card legs) after every card build
+try:
+    subprocess.run([sys.executable, "_watchlist.py"], timeout=120)
+except Exception as e:
+    print("watchlist:", e)

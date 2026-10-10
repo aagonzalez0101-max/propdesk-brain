@@ -108,6 +108,11 @@ def main():
     if changed:
         json.dump(st, open(STATE, "w"))
         try:
+            import subprocess, sys
+            subprocess.run([sys.executable, "_watchlist.py"], timeout=120)     # newly locked legs -> cloud alerts watch them
+        except Exception as e:
+            print("watchlist:", e)
+        try:
             import _tracker
             _tracker.main()
         except Exception as e:
