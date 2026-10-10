@@ -25,16 +25,22 @@ def build():
     cash_risk = sum(r.get("stake") or 0 for r in op if r.get("funding") != "bonus")
     bonus = sum(r.get("stake") or 0 for r in op if r.get("funding") == "bonus")
     frac = max(0.0, min(1.0, (bal - start) / (G - start)))
-    bar = "🟩" * int(round(frac * 12)) + "⬜" * (12 - int(round(frac * 12)))
+    k = int(frac * 12) + (1 if 0 < frac * 12 - int(frac * 12) else 0) if frac > 0 else 0   # any progress shows at least one green block
+    bar = "🟩" * k + "⬛" * (12 - k)
     day = (datetime.datetime.now(CT).date() - datetime.date.fromisoformat(S)).days + 1
     w = sum(r["result"] == "WIN" for r in done); l = sum(r["result"] == "LOSS" for r in done)
-    desc = ["## $%.2f  ➜  $%d" % (bal, G), "%s  **%.0f%%**" % (bar, 100 * frac),
-            "Day **%d** · record **%d-%d** · net **%+.2f** · next stake **$%.2f** (5%%)" % (day, w, l, bal - start, 0.05 * bal), ""]
+    desc = ["## $%.2f  ➜  $%d" % (bal, G), "%s  **%.0f%%** · **$%.0f to go**" % (bar, 100 * frac, max(G - bal, 0)),
+            "Day **%d** · record **%d-%d** · net **%+.2f** · next stake **$%.2f**" % (day, w, l, bal - start, 0.05 * bal), ""]
     if op:
-        desc.append("**⏳ Open (%d)** -- $%.2f cash at risk%s · cash on hand **$%.2f**" % (len(op), cash_risk, (" + $%.2f bonus" % bonus) if bonus else "", bal - cash_risk))
+        desc.append("**⏳ Open (%d)** · $%.2f cash at risk%s · cash on hand **$%.2f**" % (len(op), cash_risk, (" + $%.2f bonus" % bonus) if bonus else "", bal - cash_risk))
         for r in op:
-            desc.append("• %s **$%s → $%s**%s -- %s" % (r.get("sport"), ("%g" % r["stake"]) if r.get("stake") else "?", ("%g" % r["to_return"]) if r.get("to_return") else "?",
-                        " (bonus)" if r.get("funding") == "bonus" else "", (r.get("selection") or "")[:110]))
+            desc.append("**%s · $%s → $%s%s**" % (r.get("sport"), ("%g" % r["stake"]) if r.get("stake") else "?",
+                        ("%g" % r["to_return"]) if r.get("to_return") else "?", " · bonus" if r.get("funding") == "bonus" else ""))
+            for g in r.get("legs") or []:                      # 10/10 user: one readable line per leg, no shorthand
+                promo = " (promo)" if g.get("kind") == "promo" else ""
+                desc.append("　%s %s %s %g %s%s" % ("🔺" if g.get("side") == "over" else "🔻", g.get("player"),
+                            "HIGHER" if g.get("side") == "over" else "LOWER", g.get("line") or 0,
+                            (g.get("stat") or "").replace("MAPS 1-2 ", "").replace("Shots On Goal", "SOG"), promo))
         desc.append("")
     by = {}
     for r in done:

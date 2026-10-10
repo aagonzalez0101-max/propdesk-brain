@@ -180,53 +180,93 @@ def _ord(n):
     return "%d%s" % (n, "th" if 10 <= n % 100 <= 20 else {1: "st", 2: "nd", 3: "rd"}.get(n % 10, "th"))
 
 
+def _dot(hit, n):
+    """PickFinder-style dot for how often the stat went the way of the call: green 60%+, yellow 50-60%, red under 50%"""
+    if not n:
+        return "⚪"
+    r = hit / n
+    return "🟢" if r >= 0.6 else "🟡" if r >= 0.5 else "🔴"
+
+
+def _day(d):
+    try:
+        return datetime.date.fromisoformat(d).strftime("%a %m/%d").replace(" 0", " ")
+    except Exception:
+        return d
+
+
 def why_text(leg, S):
+    """10/10 user: phone-sized. Line 1 = colored dots (L10 / season / last season / vs opp), line 2 = matchup + role,
+    line 3 = model, then a warning line only when something argues against the call."""
     sp, line, over = leg["sport"], leg["line"], leg["side"] == "over"
     word = "over" if over else "under"
     es = sp.upper() in ESPORTS
-    unit = "series" if es else "games"
     P = []
     if S:
-        P.append("**Last 10:** %.1f avg -- %s %g in **%d of %d** (%s)" % (S["l10_avg"], word, line, S["l10_hit"], len(S["l10"]),
-                 ", ".join("%g" % v for v in S["l10_vals"])))
+        opp = leg.get("opp") if es else (leg.get("opp") or "")[:3]
+        dots = ["%s L10 **%d/%d**" % (_dot(S["l10_hit"], len(S["l10"])), S["l10_hit"], len(S["l10"]))]
         if S["seas_n"]:
-            P.append("**%s:** %.1f avg in %d %s -- %s %d of %d" % ("Last 45 days" if es else "This season", S["seas_avg"], S["seas_n"], unit, word, S["seas_hit"], S["seas_n"]))
+            dots.append("%s %s **%d/%d**" % (_dot(S["seas_hit"], S["seas_n"]), "45 days" if es else "Season", S["seas_hit"], S["seas_n"]))
         if S["prev_n"]:
-            P.append("**%s:** %.1f avg in %d %s -- %s **%.0f%%**" % ("Before that" if es else "Last season", S["prev_avg"], S["prev_n"], unit, word, 100 * S["prev_hit"] / S["prev_n"]))
+            dots.append("%s %s **%.0f%%**" % (_dot(S["prev_hit"], S["prev_n"]), "Before" if es else "Last yr", 100 * S["prev_hit"] / S["prev_n"]))
         if S["vs_n"]:
-            P.append("**vs %s:** %.1f avg in %d %s -- %s %d of %d" % (leg.get("opp") if es else (leg.get("opp") or "")[:3], S["vs_avg"], S["vs_n"], unit, word, S["vs_hit"], S["vs_n"]))
-        if es:
-            P.append("**Volume:** %.0f %s per series over his last 10 (last played %s) -- kills ride the map length"
-                     % (S["mins"], "minutes" if sp.upper().startswith("DOTA") else "rounds", S["last"]))
-        else:
-            P.append("**Role:** %.1f %s a night over his last 10 (last played %s)" % (S["mins"], "min TOI" if sp == "NHL" else "min", S["last"]))
+            dots.append("%s vs %s **%d/%d**" % (_dot(S["vs_hit"], S["vs_n"]), opp, S["vs_hit"], S["vs_n"]))
+        P.append(" · ".join(dots))
+        P.append("Last 10: %s  (avg **%.1f**)" % (", ".join("%g" % v for v in S["l10_vals"]), S["l10_avg"]))
+        ctx = []
         if S.get("opp_allowed"):
             n = S["n_teams"]
-            tag = " -- a soft defence" if S["opp_rank"] <= n // 3 else " -- a tight defence" if S["opp_rank"] > 2 * n // 3 else ""
-            P.append("**Opponent:** %s allow **%.1f shots/game** (%s most of %d)%s" % (NHL_TEAM.get((leg.get("opp") or "")[:3], leg.get("opp")),
-                     S["opp_allowed"], _ord(S["opp_rank"]), n, tag))
-        if S.get("team_for"):
-            P.append("**His team:** %s average %.1f shots a game" % (NHL_TEAM.get(leg.get("team"), leg.get("team")), S["team_for"]))
+            tag = " · soft D" if S["opp_rank"] <= n // 3 else " · tight D" if S["opp_rank"] > 2 * n // 3 else ""
+            ctx.append("%s allow **%.1f SOG** (%s most)%s" % (opp, S["opp_allowed"], _ord(S["opp_rank"]), tag))
+        if es:
+            ctx.append("%.0f %s/series" % (S["mins"], "min" if sp.upper().startswith("DOTA") else "rounds"))
+        else:
+            ctx.append("%.1f %s" % (S["mins"], "min TOI" if sp == "NHL" else "min"))
+        ctx.append("last played %s" % _day(S["last"]))
+        P.append(" · ".join(ctx))
     else:
-        P.append("_No box-score history in our database for this market -- the call rests on the model below._")
+        P.append("_No game history for this market yet -- the call rests on the model._")
     why = leg.get("why") or ""
     reasons = why.split(":", 1)[-1].split("|")[0].strip() if ":" in why else ""
-    if reasons:
-        P.append("**Model:** %.0f%% %s -- %s agree (%s), nothing against" % (100 * leg["p"], "HIGHER" if over else "LOWER", why.split(":")[0], reasons))
-    else:
-        P.append("**Model:** %.0f%% %s on its projection alone -- no extra reason flags%s"
-                 % (100 * leg["p"], "HIGHER" if over else "LOWER", " (NHL model-confidence %ss went 21-14 out of sample)" % word if sp == "NHL" else ""))
+    m = "Model **%.0f%%** %s" % (100 * leg["p"], "HIGHER" if over else "LOWER")
+    m += (" · %s: %s" % (why.split(":")[0], reasons)) if reasons else " · projection alone, no extra reason flags"
     if leg.get("sharp") is not None:
-        P.append("**Sharp book:** %.0f%% %s at this number -- %s" % (100 * leg["sharp"], word, "agrees" if leg["sharp"] >= 0.5 else "leans the other way"))
+        m += " · sharp %.0f%%%s" % (100 * leg["sharp"], "" if leg["sharp"] >= 0.5 else " (disagrees)")
+    P.append(m)
     if "RAISED" in why:
-        P.append("**Line moved:** PP raised it today -- raised lines still went over 62% on paper")
+        P.append("📈 PP raised this line today -- raised lines still went over 62%")
     if S and len(S["l10"]) >= 5 and S["l10_hit"] / len(S["l10"]) < 0.5:
-        P.append("⚠️ **Against it:** only %d of his last %d went %s -- the call leans on the matchup, not his form" % (S["l10_hit"], len(S["l10"]), word))
+        P.append("⚠️ Only %d of his last %d went %s -- the call leans on the matchup" % (S["l10_hit"], len(S["l10"]), word))
     if S:
         days = (datetime.date.today() - datetime.date.fromisoformat(S["last"])).days
         if days > 10:
-            P.append("⚠️ **Check he's playing:** last game was %d days ago" % days)
-    return "\n".join(P)
+            P.append("⚠️ Last game was %d days ago -- check he's playing" % days)
+    return chr(10).join(P)
+
+
+PP_LG = {"NHL": 8, "WNBA": 3, "NBA": 7, "NFL": 9, "CFB": 15, "CS2": 265, "VAL": 159, "DOTA2": 174, "LOL": 121, "SOCCER": 82}
+_IMG = {}
+
+
+def headshot(player, sport):
+    """player photo from the newest PrizePicks snapshot of that league (10/10: card legs had no headshots)"""
+    lid = PP_LG.get((sport or "").upper().replace(" ", ""))
+    if not lid:
+        return None
+    if lid not in _IMG:
+        _IMG[lid] = {}
+        try:
+            import glob, os, _arch
+            fs = sorted(_arch.files(os.path.join("lines_archive", "*", "pp_%d_*.json" % lid)), key=lambda f: (os.path.basename(os.path.dirname(f)), f.replace(".gz", "")))
+            if fs:
+                d = _arch.load(fs[-1])
+                for x in d.get("included", []):
+                    a = x.get("attributes") or {}
+                    if x.get("type") == "new_player" and a.get("image_url"):
+                        _IMG[lid][a.get("name")] = a["image_url"]
+        except Exception:
+            pass
+    return _IMG[lid].get(player)
 
 
 def post_slip(k, grp, ph, stake=None, mult=6.0, be=0.55):
@@ -237,13 +277,13 @@ def post_slip(k, grp, ph, stake=None, mult=6.0, be=0.55):
     # the bet bar (CLAUDE.md): value + head-to-head + season must agree -- a leg whose last 10 AND last season both go the other way is out
     bad = [g["player"] for g, S in zip(grp, SS) if S and len(S["l10"]) >= 5 and S["l10_hit"] / len(S["l10"]) < 0.5
            and (not S["prev_n"] or S["prev_hit"] / S["prev_n"] < 0.5)]
-    verdict = ("⚠️ SWAP %s FIRST -- form and last season both disagree" % " & ".join(bad)) if bad else               "✅ TAKE IT" if value >= 0.15 and weakest >= 0.58 else "🟡 LEAN -- small" if value > 0 else "⛔ PASS"
+    verdict = ("⚠️ SWAP %s FIRST · form and last season both disagree" % " & ".join(bad)) if bad else               "✅ TAKE IT" if value >= 0.15 and weakest >= 0.58 else "🟡 LEAN · small edge" if value > 0 else "⛔ PASS"
     head = {"title": "🧾 SLIP %d · %d-Pick Power · %gx" % (k, len(grp), mult), "color": 0x1DB954,
-            "description": "## %s\nAll %d hit about **%.0f%%** of the time -> worth **%+.0f%%** at %gx (break-even %.0f%% a leg; ours average %.0f%%)."
+            "description": "## %s\nAll %d hit **%.0f%%** of the time · worth **%+.0f%%** at %gx · break-even %.0f%%/leg, ours avg %.0f%%"
                            % (verdict, len(grp), 100 * ph, 100 * value, mult, 100 * be, 100 * sum(g["p"] for g in grp) / len(grp)),
             "fields": [{"name": "Stake", "value": ("$%.2f (5%% of roll)" % stake) if stake else "5% of roll", "inline": True},
                        {"name": "Pays", "value": ("$%.2f" % (stake * mult)) if stake else "%gx" % mult, "inline": True},
-                       {"name": "Rule", "value": "1 leg per team · confirm each line on your PP screen", "inline": True}]}
+                       {"name": "Rule", "value": "Confirm each line on your PP screen", "inline": True}]}
     E = [head]
     for g, S in zip(grp, SS):
         over = g["side"] == "over"
@@ -254,8 +294,9 @@ def post_slip(k, grp, ph, stake=None, mult=6.0, be=0.55):
                         {"name": "Game", "value": "%s vs %s" % (g.get("team") or "", (g.get("opp") or "")[:14]), "inline": True},
                         {"name": "Start", "value": t, "inline": True}],
              "footer": {"text": "PropDesk · %s · PrizePicks" % g["sport"]}}
-        if g.get("img"):
-            e["thumbnail"] = {"url": g["img"]}
+        img = g.get("img") or headshot(g["player"], g["sport"])
+        if img:
+            e["thumbnail"] = {"url": img}
         E.append(e)
     if not hook:
         print(json.dumps(E, indent=1, ensure_ascii=False)[:4000]); return
