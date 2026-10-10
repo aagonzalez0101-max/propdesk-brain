@@ -54,22 +54,31 @@ if os.path.exists("direction_paper.jsonl"):
         std.append(dict(sport=r["sport"], player=r["player"], team=r.get("team"), opp=r.get("opp"), stat=r["stat"], line=r["line"], side=r["side"],
                         p=r["p"], why="%d reasons: %s%s" % (r.get("agree", 3), r.get("why", ""), (" | PP RAISED %s->%s (paper: over 62%%)" % (fl, l["line"])) if raised else ""),
                         start=l["start"], img=l.get("img")))
-# CS2 high-line unders on the live PP board
-mu = {}
-for f in ("cs2_paper.jsonl", "cs2_priced_all.jsonl"):
-    if os.path.exists(f):
-        for x in open(f, encoding="utf-8"):
-            r = json.loads(x)
-            if r.get("model_mu") and str(r.get("start", ""))[:10] >= today:
-                mu[(M.norm(r["player"]), "h" if "Head" in r["stat"] else "k")] = r["model_mu"]
-for (sp, pl, st), l in live.items():
-    if sp != "CS2" or "MAPS 1-2" not in l["stat"]:
-        continue
-    k = "h" if "Headshot" in l["stat"] else "k"; m = mu.get((pl, k))
-    if pl not in USED and m and l["line"] >= (16.5 if k == "h" else 30.5) and m < 0.95 * l["line"] and \
-            datetime.datetime.fromisoformat(l["start"]).astimezone(datetime.timezone.utc) > now:
-        std.append(dict(sport="CS2", player=l["player"], team=l.get("team"), opp=l.get("opp"), stat=l["stat"], line=l["line"], side="under",
-                        p=0.62, why="CS2 high line, model %.1f" % m, start=l["start"], img=l.get("img")))
+# CS2: ONLY the measured rule (10/10 user: "I don't want off-the-books bets"). cs2_paper picks with model edge 3-9% (the band that hit
+# 62% / 68.2% when the map is not a coin flip); bigger edges are the WORST legs (top-of-card 22-50%) and are never carded.
+# The old "high-line under" shortcut (flat p=0.62, unmeasured) is gone -- it put 13-16% edge legs on the 10/10 card.
+seen_cs = set()
+if os.path.exists("cs2_paper.jsonl"):
+    for x in open("cs2_paper.jsonl", encoding="utf-8"):
+        r = json.loads(x)
+        e = r.get("edge") or 0
+        if not (0.03 <= e <= 0.09) or str(r.get("start", ""))[:10] < today or r.get("maps") != 2:
+            continue
+        if datetime.datetime.fromisoformat(r["start"].replace("Z", "+00:00")) < now or M.norm(r["player"]) in USED:
+            continue
+        stat = "MAPS 1-2 Headshots" if r.get("kind") == "hs" else "MAPS 1-2 Kills"
+        l = live.get(("CS2", M.norm(r["player"]), M.norm(stat)))
+        side = "over" if r.get("side") == "higher" else "under"
+        if not l or (side == "over" and l["line"] > r["line"]) or (side == "under" and l["line"] < r["line"]):
+            continue                                                   # PP number must be as good as the one the model priced
+        k = (r["player"], stat)
+        if k in seen_cs:
+            continue
+        seen_cs.add(k)
+        coin = 0.45 <= (r.get("map_winp") or 0.5) <= 0.55
+        std.append(dict(sport="CS2", player=r["player"], team=r.get("team"), opp=r.get("opp"), stat=stat, line=l["line"], side=side,
+                        p=0.62 if coin else 0.68, why="CS2 rule: edge %.1f%%%s" % (100 * e, "" if coin else ", lopsided map (68% tier)"),
+                        start=l["start"], img=l.get("img")))
 
 # sharp check on the STANDARD leg: a Pinnacle/FanDuel price that disagrees with our side by 5+ pts drops it (Gauthier 10/9: 51%)
 PINS = {}
