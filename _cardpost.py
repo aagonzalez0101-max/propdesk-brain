@@ -81,8 +81,12 @@ def esports_games(leg):
         except Exception:
             return None
         _ES_CACHE[(sp, tuple(sorted(names)))] = rows
-    series = {}
+    series, seen = {}, set()
     for r in rows:
+        k = (r.get("game_id") or r.get("match_id"), r.get("player") or r.get("pid") or r.get("account_id") or r.get("name"))
+        if k in seen:                                     # 10/10: two pullers ran at once and wrote every map twice -> 102 "kills"
+            continue
+        seen.add(k)
         sid = r.get("match") if sp != "Dota2" else "%s|%s" % (r["date"], _norm(r.get("opp")))
         series.setdefault(sid, []).append(r)
     G = []

@@ -5,6 +5,7 @@ Each minute it checks what is due (Central time) and has not run yet; after ever
 (and the laptop) start from the newest ledgers.
     08:30  grade      python _daily.py grade      results -> sports.db, every ledger graded, post-mortem
     09:15  lines AM   python _daily.py lines      boards, screens, direction picks, THE CARD -> Discord #card
+    15:00  lines mid  picks + CS2/Dota projections + card    new lines for TONIGHT's games (the 9 PM card is tomorrow's)
     21:00  lines PM   python _daily.py lines      tomorrow's card the night before (lock early -- lines get pulled)
     hourly :05        snapshots + raised lines + card-leg line watch + Dota projections
 Done-markers live in _brain_done.json (inside the bundle), so a restarted chain never repeats or skips a slot.
@@ -21,6 +22,8 @@ DONE_F = "_brain_done.json"
 # (name, CT slot, commands, hard timeout s, typical runtime s -- the laptop measured grade ~63 min, lines ~35 min)
 DAILY = [("grade", (8, 30), [["_daily.py", "grade"]], 7200, 4200),
          ("lines_am", (9, 15), [["_daily.py", "lines"]], 5400, 2400),
+         # 10/10 user: the 9 PM card is TOMORROW's -- lines posted after 9:15 AM for tonight's games had no card. Mid-afternoon pass:
+         ("lines_mid", (15, 0), [["_dir_search.py", "score"], ["_cs2_live.py", "card"], ["_dota_proj.py"], ["_pair2x.py"]], 3600, 1200),
          ("lines_pm", (21, 0), [["_daily.py", "lines"]], 5400, 2400)]
 HOURLY = [["_snap_lines.py"], ["_snap_sharps.py"], ["_raised.py"], ["_linewatch.py"], ["_dota_proj.py"]]
 
