@@ -1,0 +1,9 @@
+# propdesk-brain: CODE ONLY (public repo). Whitelist -- everything is ignored unless listed below.
+# Data travels in the release bundle (_bundle.py); secrets (.env, notify.json) never leave this laptop.
+/*
+!/.gitignore
+!/requirements.txt
+!/*.py
+!/.github/
+!/betting/
+__pycache__/
