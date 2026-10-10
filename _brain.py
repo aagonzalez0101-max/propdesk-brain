@@ -12,7 +12,11 @@ Done-markers live in _brain_done.json (inside the bundle), so a restarted chain 
 """
 import os, sys, json, time, datetime, subprocess
 
-CT = datetime.timezone(datetime.timedelta(hours=-5))      # CDT; the slots drift an hour early after Nov 1 -- fine for a schedule
+try:                                                    # 10/10 user: everything in Texas time (Central, DST-aware)
+    from zoneinfo import ZoneInfo
+    CT = ZoneInfo("America/Chicago")
+except Exception:
+    CT = datetime.timezone(datetime.timedelta(hours=-5))
 DONE_F = "_brain_done.json"
 # (name, CT slot, commands, hard timeout s, typical runtime s -- the laptop measured grade ~63 min, lines ~35 min)
 DAILY = [("grade", (8, 30), [["_daily.py", "grade"]], 7200, 4200),

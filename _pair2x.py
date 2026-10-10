@@ -10,7 +10,11 @@ best goblin you decide -- that's how we get the 2x's").
 import json, datetime, os, subprocess, sys
 import _props as P, _mismatch as M
 
-CT = datetime.timezone(datetime.timedelta(hours=-5))
+try:                                                    # 10/10 user: everything in Texas time (Central, DST-aware)
+    from zoneinfo import ZoneInfo
+    CT = ZoneInfo("America/Chicago")
+except Exception:
+    CT = datetime.timezone(datetime.timedelta(hours=-5))
 now = datetime.datetime.now(datetime.timezone.utc)
 today = datetime.datetime.now(CT).date().isoformat()
 LG = {"NHL": 8, "WNBA": 3, "NBA": 7, "NFL": 9, "CFB": 15, "CS2": 265}
@@ -88,7 +92,8 @@ for s_ in std:
 std = keep
 # goblins (fresh scan). 10/9 user: the goblin must be the tier ONE BELOW the standard line (the shallowest goblin) -- the deep tiers
 # pay 1.2-1.3x and kill the 2x. Questionable/Doubtful NFL players are out.
-subprocess.run([sys.executable, "_goblins.py"], capture_output=True, timeout=1500, env=dict(os.environ, PYTHONIOENCODING="utf-8"))
+if not os.environ.get("SKIP_GOBLINS"):                                  # goblins are promo-only now; skip the 10-25 min scan when in a hurry
+    subprocess.run([sys.executable, "_goblins.py"], capture_output=True, timeout=1500, env=dict(os.environ, PYTHONIOENCODING="utf-8"))
 G = json.load(open("_goblins_today.json"))
 top = {}
 for g in G:

@@ -205,7 +205,9 @@ def featurize(lines, pg, tg, live=False):
                 continue                                                # push
         if sp == "NHL" and st.get("gtype") == "pre":
             miss["preseason game"] += 1; continue
-        prior = [x for x in games if x[0] < gdate]
+        # 10/10 bug: sports.db dates night games by UTC, so Friday's 8:30 PM CT game is stored as Saturday -- "< today" dropped it and
+        # GS showed "4+ days rest" on a back-to-back. A live line is always for an unplayed game: every stored game is prior.
+        prior = list(games) if live else [x for x in games if x[0] < gdate]
         if sp == "NHL":
             prior = [x for x in prior if x[5].get("gtype") != "pre"]
         hist = []

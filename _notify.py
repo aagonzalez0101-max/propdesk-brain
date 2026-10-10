@@ -10,7 +10,11 @@ Test:  python _notify.py test
 """
 import os, sys, json, datetime, requests
 
-CT = datetime.timezone(datetime.timedelta(hours=-5))
+try:                                                    # 10/10 user: everything in Texas time (Central, DST-aware)
+    from zoneinfo import ZoneInfo
+    CT = ZoneInfo("America/Chicago")
+except Exception:
+    CT = datetime.timezone(datetime.timedelta(hours=-5))
 CFG = "notify.json"
 FEED = os.path.join("daily_log", "feed.txt")
 ICON = {"PROMO": "🟢", "MOVE": "📈", "PULLED": "⛔", "VALUE": "💰", "CARD": "🧾", "RESULT": "✅", "TEST": "🔔"}
@@ -42,7 +46,7 @@ def send(kind, text, priority="default"):
             col = {"CARD": 0x8B5CF6, "RESULT": 0x22C55E, "TEST": 0x64748B, "PULLED": 0xEF4444, "MOVE": 0xF59E0B}.get(kind, 0x64748B)
             requests.post(c["discord_webhook"], timeout=15, json={"username": "PropDesk", "embeds": [{
                 "title": "%s %s" % (ICON.get(kind, ""), {"CARD": "TODAY'S CARD", "RESULT": "RESULTS", "PULLED": "CARD LEG PULLED", "MOVE": "CARD LEG MOVED"}.get(kind, kind)),
-                "description": text[:4000], "color": col, "footer": {"text": "PropDesk · " + now.strftime("%a %m/%d %I:%M %p CT")}}]})
+                "description": text[:4000], "color": col, "footer": {"text": "PropDesk · " + now.strftime("%a %m/%d %I:%M %p TX")}}]})
         except Exception as e:
             print("discord:", e)
     print(line)

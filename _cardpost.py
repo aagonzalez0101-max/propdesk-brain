@@ -6,7 +6,12 @@ Called by _pair2x.py; webhook = notify.json "discord_webhook" (#card).
 """
 import json, sqlite3, statistics, datetime, requests, time
 
-CT = datetime.timezone(datetime.timedelta(hours=-5))
+try:                                                    # 10/10 user: "make everything Texas time" -- Central, DST-aware
+    from zoneinfo import ZoneInfo
+    CT = ZoneInfo("America/Chicago")
+except Exception:
+    CT = datetime.timezone(datetime.timedelta(hours=-5))
+ESPORTS = ("CS2", "VAL", "DOTA2", "DOTA 2", "DOTA")
 NHL_STAT = {"shots on goal": ("sog",), "points": ("points",), "assists": ("assists",), "goals": ("goals",), "hits": ("hits",),
             "blocked shots": ("blocks",)}
 HOOP_STAT = {"points": ("pts",), "rebounds": ("reb",), "assists": ("ast",), "pts+rebs+asts": ("pts", "reb", "ast"),
@@ -34,36 +39,118 @@ def _rows(db, sport, player):
                       (sport, player)).fetchall()
 
 
-def stats_for(leg):
-    """Numbers behind the leg. None when the sport/stat isn't in sports.db."""
-    sp, st = leg["sport"], leg["stat"].lower()
-    keys = NHL_STAT.get(st) if sp == "NHL" else HOOP_STAT.get(st) if sp in ("WNBA", "NBA") else None
-    if not keys:
+ESPORT_FILES = {"CS2": "cs2_maps.jsonl", "VAL": "val_maps2.jsonl", "Dota2": "dota_matches.jsonl"}
+_ES_CACHE = {}
+
+
+def _norm(s):
+    return "".join(ch for ch in (s or "").lower() if ch.isalnum())
+
+
+def esports_games(leg):
+    """10/10 user: CS2/VAL/Dota legs said 'no box-score history' -- the data was in our map files, the card never read it.
+    One row per SERIES for the maps the line covers (MAPS 1-2 by default, 'MAP 3' = map 3): stat summed over those maps, and summed
+    over players for combos ("Ws + Mira + kaori"). 'season' = last 45 days vs older; 'mins' = rounds (CS2/VAL) or minutes (Dota)."""
+    sp = "Dota2" if leg["sport"].upper().startswith("DOTA") else leg["sport"].upper()
+    f = ESPORT_FILES.get(sp)
+    if not f:
         return None
-    try:
-        db = sqlite3.connect("sports.db")
-        R = _rows(db, sp, leg["player"])
-    except Exception:
+    st = leg["stat"].upper()
+    key = "hs" if "HEADSHOT" in st else "kills" if "KILL" in st else None
+    if not key:
         return None
-    if sp == "NHL" and leg.get("team"):                  # "T. Hall" can be two players -- keep his current team's rows + older seasons of the same id
-        R = [r for r in R if r[5] == leg["team"]] or R
+    maps = (3,) if "MAP 3" in st else (1,) if "MAP 1 " in st + " " and "1-2" not in st else (1, 2)
+    names = {_norm(n) for n in leg["player"].split(" + ")}
+    ids = set()
+    if sp == "CS2":
+        try:
+            for pid, v in json.load(open("cs2_nicks.json", encoding="utf-8")).items():
+                if _norm(v.get("nick")) in names:
+                    ids.add(str(pid))
+        except Exception:
+            pass
+    rows = _ES_CACHE.get((sp, tuple(sorted(names))))
+    if rows is None:
+        rows = []
+        try:
+            for l in open(f, encoding="utf-8"):
+                r = json.loads(l)
+                who = str(r.get("player")) if sp == "CS2" else _norm(r.get("name"))
+                if (who in ids) if sp == "CS2" else (who in names):
+                    rows.append(r)
+        except Exception:
+            return None
+        _ES_CACHE[(sp, tuple(sorted(names)))] = rows
+    series = {}
+    for r in rows:
+        sid = r.get("match") if sp != "Dota2" else "%s|%s" % (r["date"], _norm(r.get("opp")))
+        series.setdefault(sid, []).append(r)
     G = []
-    for season, date, opp, mins, js, team_ in R:
-        s = json.loads(js)
-        if sp == "NHL" and s.get("gtype") not in (None, "reg", "post"):
-            continue
-        G.append(dict(season=season, date=date, opp=opp, mins=mins or 0, v=sum(float(s.get(k) or 0) for k in keys)))
-    if not G:
-        return None
+    cut = (datetime.date.today() - datetime.timedelta(days=45)).isoformat()
+    for sid, R in series.items():
+        if sp == "CS2":
+            order = sorted({r["map_no"] for r in R})
+            pick = [r for r in R if r["map_no"] in maps]
+        else:                                             # VAL / Dota: maps ordered by game/match id inside the series
+            gid = "game_id" if sp == "VAL" else "match_id"
+            order = sorted({int(r[gid]) for r in R})
+            want = {order[i - 1] for i in maps if i <= len(order)}
+            pick = [r for r in R if int(r[gid]) in want]
+        if len({(r.get("map_no") or r.get("game_id") or r.get("match_id")) for r in pick}) < len(maps):
+            continue                                      # series ended before the maps the line needs (e.g. 2-0, no map 3)
+        v = sum(float(r.get(key) or 0) for r in pick)
+        span = sum(float(r.get("rounds") or r.get("minutes") or 0) for r in pick) / max(len(names), 1)
+        d = min(r["date"] for r in pick)
+        G.append(dict(season="recent" if d >= cut else "older", date=d, opp=pick[0].get("opp"), mins=span, v=v))
+    G.sort(key=lambda g: g["date"])
+    return G or None
+
+
+def stats_for(leg):
+    """Numbers behind the leg. None when the sport/stat has no history we can read."""
+    sp, st = leg["sport"], leg["stat"].lower()
+    if sp.upper() in ("CS2", "VAL", "DOTA2", "DOTA 2", "DOTA"):
+        G = esports_games(leg)
+        if not G:
+            return None
+        db = None
+    else:
+        keys = NHL_STAT.get(st) if sp == "NHL" else HOOP_STAT.get(st) if sp in ("WNBA", "NBA") else None
+        if not keys:
+            return None
+        try:
+            db = sqlite3.connect("sports.db")
+            R = _rows(db, sp, leg["player"])
+        except Exception:
+            return None
+        if sp == "NHL" and leg.get("team"):              # "T. Hall" can be two players -- keep his current team's rows + older seasons of the same id
+            R = [r for r in R if r[5] == leg["team"]] or R
+        G = []
+        for season, date, opp, mins, js, team_ in R:
+            s = json.loads(js)
+            if sp == "NHL" and s.get("gtype") not in (None, "reg", "post"):
+                continue
+            G.append(dict(season=season, date=date, opp=opp, mins=mins or 0, v=sum(float(s.get(k) or 0) for k in keys)))
+        if not G:
+            return None
     line, over = leg["line"], leg["side"] == "over"
     hit = lambda X: sum((g["v"] > line) if over else (g["v"] < line) for g in X)
-    cur = max(g["season"] for g in G)
-    seas = [g for g in G if g["season"] == cur]
-    older = sorted({g["season"] for g in G if g["season"] != cur})
-    prev = [g for g in G if older and g["season"] == older[-1]]
+    if sp.upper() in ESPORTS:                             # esports: "recent" = last 45 days, "older" = before -- never relabel old as recent
+        cur = "recent"
+        seas = [g for g in G if g["season"] == "recent"]
+        prev = [g for g in G if g["season"] == "older"]
+    else:
+        cur = max(g["season"] for g in G)
+        seas = [g for g in G if g["season"] == cur]
+        older = sorted({g["season"] for g in G if g["season"] != cur})
+        prev = [g for g in G if older and g["season"] == older[-1]]
     l10 = G[-10:]
     opp = (leg.get("opp") or "")[:3].upper()
-    vs = [g for g in G if opp and (g["opp"] or "").upper().startswith(opp)]
+    if sp.upper() in ESPORTS:                             # esports opponents are full team names ("Team Vitality" vs "Vitality")
+        on = _norm(leg.get("opp")).replace("team", "").replace("esports", "").replace("gaming", "")
+        vs = [g for g in G if on and len(on) >= 3 and (on in _norm(g["opp"]) or _norm(g["opp"]).replace("team", "") in on)]
+    else:
+        vs = [g for g in G if opp and (g["opp"] or "").upper().startswith(opp)]
     mean = lambda X: statistics.mean(g["v"] for g in X) if X else None
     out = dict(l10=l10, l10_avg=mean(l10), l10_hit=hit(l10), l10_vals=[g["v"] for g in l10],
                seas_n=len(seas), seas_avg=mean(seas), seas_hit=hit(seas), prev_n=len(prev), prev_avg=mean(prev), prev_hit=hit(prev),
@@ -92,17 +179,23 @@ def _ord(n):
 def why_text(leg, S):
     sp, line, over = leg["sport"], leg["line"], leg["side"] == "over"
     word = "over" if over else "under"
+    es = sp.upper() in ESPORTS
+    unit = "series" if es else "games"
     P = []
     if S:
         P.append("**Last 10:** %.1f avg -- %s %g in **%d of %d** (%s)" % (S["l10_avg"], word, line, S["l10_hit"], len(S["l10"]),
                  ", ".join("%g" % v for v in S["l10_vals"])))
         if S["seas_n"]:
-            P.append("**This season:** %.1f avg in %d games -- %s %d of %d" % (S["seas_avg"], S["seas_n"], word, S["seas_hit"], S["seas_n"]))
+            P.append("**%s:** %.1f avg in %d %s -- %s %d of %d" % ("Last 45 days" if es else "This season", S["seas_avg"], S["seas_n"], unit, word, S["seas_hit"], S["seas_n"]))
         if S["prev_n"]:
-            P.append("**Last season:** %.1f avg in %d games -- %s **%.0f%%**" % (S["prev_avg"], S["prev_n"], word, 100 * S["prev_hit"] / S["prev_n"]))
+            P.append("**%s:** %.1f avg in %d %s -- %s **%.0f%%**" % ("Before that" if es else "Last season", S["prev_avg"], S["prev_n"], unit, word, 100 * S["prev_hit"] / S["prev_n"]))
         if S["vs_n"]:
-            P.append("**vs %s:** %.1f avg in %d games -- %s %d of %d" % ((leg.get("opp") or "")[:3], S["vs_avg"], S["vs_n"], word, S["vs_hit"], S["vs_n"]))
-        P.append("**Role:** %.1f %s a night over his last 10 (last played %s)" % (S["mins"], "min TOI" if sp == "NHL" else "min", S["last"]))
+            P.append("**vs %s:** %.1f avg in %d %s -- %s %d of %d" % (leg.get("opp") if es else (leg.get("opp") or "")[:3], S["vs_avg"], S["vs_n"], unit, word, S["vs_hit"], S["vs_n"]))
+        if es:
+            P.append("**Volume:** %.0f %s per series over his last 10 (last played %s) -- kills ride the map length"
+                     % (S["mins"], "minutes" if sp.upper().startswith("DOTA") else "rounds", S["last"]))
+        else:
+            P.append("**Role:** %.1f %s a night over his last 10 (last played %s)" % (S["mins"], "min TOI" if sp == "NHL" else "min", S["last"]))
         if S.get("opp_allowed"):
             n = S["n_teams"]
             tag = " -- a soft defence" if S["opp_rank"] <= n // 3 else " -- a tight defence" if S["opp_rank"] > 2 * n // 3 else ""
@@ -117,8 +210,8 @@ def why_text(leg, S):
     if reasons:
         P.append("**Model:** %.0f%% %s -- %s agree (%s), nothing against" % (100 * leg["p"], "HIGHER" if over else "LOWER", why.split(":")[0], reasons))
     else:
-        P.append("**Model:** %.0f%% %s on its projection alone -- no extra reason flags (NHL model-confidence %ss went 21-14 out of sample)"
-                 % (100 * leg["p"], "HIGHER" if over else "LOWER", word))
+        P.append("**Model:** %.0f%% %s on its projection alone -- no extra reason flags%s"
+                 % (100 * leg["p"], "HIGHER" if over else "LOWER", " (NHL model-confidence %ss went 21-14 out of sample)" % word if sp == "NHL" else ""))
     if leg.get("sharp") is not None:
         P.append("**Sharp book:** %.0f%% %s at this number -- %s" % (100 * leg["sharp"], word, "agrees" if leg["sharp"] >= 0.5 else "leans the other way"))
     if "RAISED" in why:
@@ -150,7 +243,7 @@ def post_slip(k, grp, ph, stake=None, mult=6.0, be=0.55):
     E = [head]
     for g, S in zip(grp, SS):
         over = g["side"] == "over"
-        t = datetime.datetime.fromisoformat(g["start"].replace("Z", "+00:00")).astimezone(CT).strftime("%a %m/%d %I:%M %p CT")
+        t = datetime.datetime.fromisoformat(g["start"].replace("Z", "+00:00")).astimezone(CT).strftime("%a %m/%d %I:%M %p") + " TX"
         e = {"title": "%s  %s · %s" % ("🔺 HIGHER" if over else "🔻 LOWER", g["player"], g["stat"]), "color": 0x22C55E if over else 0xEF4444,
              "description": ("## %s %g\n%s" % ("HIGHER than" if over else "LOWER than", g["line"], why_text(g, S)))[:4000],
              "fields": [{"name": "Model", "value": "%.0f%%" % (100 * g["p"]), "inline": True},
