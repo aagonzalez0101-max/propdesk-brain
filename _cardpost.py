@@ -238,7 +238,7 @@ def post_slip(k, grp, ph, stake=None, mult=6.0, be=0.55):
     bad = [g["player"] for g, S in zip(grp, SS) if S and len(S["l10"]) >= 5 and S["l10_hit"] / len(S["l10"]) < 0.5
            and (not S["prev_n"] or S["prev_hit"] / S["prev_n"] < 0.5)]
     verdict = ("⚠️ SWAP %s FIRST -- form and last season both disagree" % " & ".join(bad)) if bad else               "✅ TAKE IT" if value >= 0.15 and weakest >= 0.58 else "🟡 LEAN -- small" if value > 0 else "⛔ PASS"
-    head = {"title": "🧾 SLIP %d · %d-Pick Power · %gx" % (k, len(grp), mult), "color": 0x8B5CF6,
+    head = {"title": "🧾 SLIP %d · %d-Pick Power · %gx" % (k, len(grp), mult), "color": 0x1DB954,
             "description": "## %s\nAll %d hit about **%.0f%%** of the time -> worth **%+.0f%%** at %gx (break-even %.0f%% a leg; ours average %.0f%%)."
                            % (verdict, len(grp), 100 * ph, 100 * value, mult, 100 * be, 100 * sum(g["p"] for g in grp) / len(grp)),
             "fields": [{"name": "Stake", "value": ("$%.2f (5%% of roll)" % stake) if stake else "5% of roll", "inline": True},
@@ -248,7 +248,7 @@ def post_slip(k, grp, ph, stake=None, mult=6.0, be=0.55):
     for g, S in zip(grp, SS):
         over = g["side"] == "over"
         t = datetime.datetime.fromisoformat(g["start"].replace("Z", "+00:00")).astimezone(CT).strftime("%a %m/%d %I:%M %p") + " TX"
-        e = {"title": "%s  %s · %s" % ("🔺 HIGHER" if over else "🔻 LOWER", g["player"], g["stat"]), "color": 0x22C55E if over else 0xEF4444,
+        e = {"title": "%s  %s · %s" % ("🔺 HIGHER" if over else "🔻 LOWER", g["player"], g["stat"]), "color": 0x1ED760 if over else 0xF3727F,
              "description": ("## %s %g\n%s" % ("HIGHER than" if over else "LOWER than", g["line"], why_text(g, S)))[:4000],
              "fields": [{"name": "Model", "value": "%.0f%%" % (100 * g["p"]), "inline": True},
                         {"name": "Game", "value": "%s vs %s" % (g.get("team") or "", (g.get("opp") or "")[:14]), "inline": True},
@@ -288,7 +288,7 @@ def roll():
         return None
 
 
-def post_embed(title, text, color=0x8B5CF6):
+def post_embed(title, text, color=0x1DB954):
     hook = cfg().get("discord_webhook")
     if hook:
         requests.post(hook, json={"username": "PropDesk", "embeds": [{"title": title, "description": text[:4000], "color": color}]}, timeout=20)

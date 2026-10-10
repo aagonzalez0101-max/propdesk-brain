@@ -43,7 +43,7 @@ def send(kind, text, priority="default"):
     # 10/9: the CLOUD (propdesk-cloud) posts promos/moves/value; the laptop posts only the card + results to #card, as embed cards
     if c.get("discord_webhook") and kind in c.get("discord_kinds", ["CARD", "RESULT", "TEST", "PULLED", "MOVE"]):
         try:
-            col = {"CARD": 0x8B5CF6, "RESULT": 0x22C55E, "TEST": 0x64748B, "PULLED": 0xEF4444, "MOVE": 0xF59E0B}.get(kind, 0x64748B)
+            col = {"CARD": 0x1DB954, "RESULT": 0x1ED760, "TEST": 0x7C7C7C, "PULLED": 0xF3727F, "MOVE": 0xFFA42B}.get(kind, 0x7C7C7C)
             requests.post(c["discord_webhook"], timeout=15, json={"username": "PropDesk", "embeds": [{
                 "title": "%s %s" % (ICON.get(kind, ""), {"CARD": "TODAY'S CARD", "RESULT": "RESULTS", "PULLED": "CARD LEG PULLED", "MOVE": "CARD LEG MOVED"}.get(kind, kind)),
                 "description": text[:4000], "color": col, "footer": {"text": "PropDesk · " + now.strftime("%a %m/%d %I:%M %p TX")}}]})

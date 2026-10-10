@@ -54,7 +54,7 @@ def build():
             rows.append("%s %d-%d %+.2f" % (t, sum(r["result"] == "WIN" for r in g), sum(r["result"] == "LOSS" for r in g), n))
     if rows:
         desc.append("**By type:** " + " · ".join(rows))
-    return {"title": "🛣️ ROAD TO $%d" % G, "description": "\n".join(desc)[:4000], "color": 0x22C55E if bal >= start else 0xEF4444,
+    return {"title": "🛣️ ROAD TO $%d" % G, "description": "\n".join(desc)[:4000], "color": 0x1ED760 if bal >= start else 0xF3727F,
             "footer": {"text": "PropDesk · updated %s TX · pin this message" % datetime.datetime.now(CT).strftime("%a %m/%d %I:%M %p")}}
 
 

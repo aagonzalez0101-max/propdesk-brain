@@ -95,11 +95,11 @@ def main():
             continue
         started = min(x["start"] for x in rec["legs"]) < datetime.datetime.now(datetime.timezone.utc).isoformat()
         if users(ch, mid, SKIP):
-            mark(rec, "⏭ SKIPPED", 0x64748B); st["done"].append(mid); changed = True
+            mark(rec, "⏭ SKIPPED", 0x7C7C7C); st["done"].append(mid); changed = True
         elif users(ch, mid, LOCK) or users(ch, mid, BONUS):
             bonus = bool(users(ch, mid, BONUS))
             row = log_bet(rec, bonus)
-            mark(rec, "🔒 LOCKED · $%g%s → $%g" % (row["stake"], " bonus" if bonus else "", row["to_return"]), 0x22C55E)
+            mark(rec, "🔒 LOCKED · $%g%s → $%g" % (row["stake"], " bonus" if bonus else "", row["to_return"]), 0x1ED760)
             st["done"].append(mid); changed = True
             print("locked:", row["selection"][:90])
         elif started:
