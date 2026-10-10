@@ -16,7 +16,7 @@ import os, sys, json, tarfile, datetime, subprocess, urllib.request
 REPO = "aagonzalez0101-max/propdesk-brain"
 TAG, ASSET = "data", "bundle.tar.gz"
 SKIP_DIRS = {"lines_archive", "data", "_fotmob", "_img_cache", "_site_cache", "_euro", "_nbl", "_archive_old", "_archive_2026-09",
-             ".claude", "__pycache__", ".git", ".github", "betting", "_bundle_tmp"}
+             ".claude", "__pycache__", ".git", ".github", "betting", "_bundle_tmp", "graphify-out"}
 SKIP_EXT = {".py", ".log", ".out", ".vtt", ".cmd", ".sh", ".md"}
 SKIP_FILES = {".env", "notify.json", ".gitignore", "requirements.txt", ASSET, "_bundle_state.json"}
 STATE = "_bundle_state.json"
