@@ -59,7 +59,8 @@ def build():
 
 
 def main():
-    hook = json.load(open("notify.json", encoding="utf-8")).get("discord_webhook")
+    c = json.load(open("notify.json", encoding="utf-8"))
+    hook = c.get("tracker_webhook") or c.get("discord_webhook")      # 10/10: its own channel
     if not hook:
         print("no webhook"); return
     emb = build()

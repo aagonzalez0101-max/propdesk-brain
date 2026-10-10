@@ -44,9 +44,10 @@ jobs:
         id: pull
         run: python _bundle.py pull
       - name: Discord webhook (#card) from secret
-        run: python -c "import json,os; json.dump({'discord_webhook': os.environ['W']}, open('notify.json','w'))"
+        run: python -c "import json,os; json.dump({'discord_webhook': os.environ['W'], 'tracker_webhook': os.environ['T']}, open('notify.json','w'))"
         env:
           W: ${{ secrets.CARD_WEBHOOK }}
+          T: ${{ secrets.TRACKER_WEBHOOK }}
       - name: run what is due (loops ~5h30m)
         run: python _brain.py 330
       - name: final bundle upload
