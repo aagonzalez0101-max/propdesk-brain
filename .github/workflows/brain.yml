@@ -1,0 +1,57 @@
+name: brain
+# PropDesk brain (10/10): grading 08:30, card 09:15 + 21:00 (CT), hourly snapshots/line watch -- with the laptop OFF.
+# One job loops ~5h30m (_brain.py runs whatever is due), uploads the data bundle after every task, then dispatches its own next run.
+# GitHub drops frequent cron triggers, so the cron below is only a backup that restarts a broken chain.
+on:
+  schedule:
+    - cron: "40 */4 * * *"
+  workflow_dispatch: {}
+permissions:
+  contents: write
+  actions: write
+concurrency:
+  group: brain
+  cancel-in-progress: false
+jobs:
+  brain:
+    runs-on: ubuntu-latest
+    timeout-minutes: 355
+    env:
+      GH_TOKEN: ${{ github.token }}
+      PROPDESK_CLOUD: "1"
+      PYTHONIOENCODING: utf-8
+      CFBD_API_KEY: ${{ secrets.CFBD_API_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -q -r requirements.txt
+      - name: big caches (FotMob, photos, site)
+        id: cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            _fotmob
+            _img_cache
+            _site_cache
+          key: brain-caches-${{ github.run_id }}
+          restore-keys: brain-caches-
+      - name: seed caches on a miss
+        if: steps.cache.outputs.cache-matched-key == ''
+        run: python _bundle.py cold-pull
+      - name: pull the data bundle
+        id: pull
+        run: python _bundle.py pull
+      - name: Discord webhook (#card) from secret
+        run: python -c "import json,os; json.dump({'discord_webhook': os.environ['W']}, open('notify.json','w'))"
+        env:
+          W: ${{ secrets.CARD_WEBHOOK }}
+      - name: run what is due (loops ~5h30m)
+        run: python _brain.py 330
+      - name: final bundle upload
+        if: always() && steps.pull.outcome == 'success'
+        run: python _bundle.py push --cloud
+      - name: start the next run
+        if: always()
+        run: gh workflow run brain.yml --ref main -R ${{ github.repository }} || echo "chain dispatch failed -- the 4-hourly cron restarts it"
