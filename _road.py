@@ -30,4 +30,5 @@ for t in ("SYSTEM", "PROMO", "OFF"):
         print("   %-7s %d-%d   net %+.2f   ROI %s" % (t, sum(r["result"] == "WIN" for r in g), sum(r["result"] == "LOSS" for r in g), n, "%+.0f%%" % (100 * n / st) if st else "-"))
 op = [r for r in live if r.get("result") in (None, "PENDING")]
 if op:
-    print("   open: %d bet(s), $%.2f at risk" % (len(op), sum(r.get("stake") or 0 for r in op)))
+    cash = sum(r.get("stake") or 0 for r in op if r.get("funding") != "bonus"); bonus = sum(r.get("stake") or 0 for r in op if r.get("funding") == "bonus")
+    print("   open: %d bet(s), $%.2f cash at risk%s -> cash on hand $%.2f" % (len(op), cash, (" + $%.2f bonus" % bonus) if bonus else "", bal - cash))

@@ -116,6 +116,7 @@ def grade(log):
         ("grade yesterday's card", ["_card.py", "grade"], 300),
         ("recalibrate probabilities", ["_calibrate.py"], 120),
         ("experiment replay (one change at a time)", ["_experiments.py", "replay"], 300),
+        ("Discord: update the pinned Road-to-$500 tracker", ["_tracker.py"], 120),
     ]
     for label, args, to in steps:
         run(label, args, to, log)
