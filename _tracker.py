@@ -123,11 +123,11 @@ def render_dashboard(bal, start, goal, day, w, l, stake, op, cash_risk, bonus):
             d.rounded_rectangle(P(40, yy, 48, yy + hgt), radius=4 * S, fill=ORANGE if isb else GREEN)
             head = "%s  ·  $%s → $%s" % (r.get("sport"), ("%g" % r["stake"]) if r.get("stake") else "?", ("%g" % r["to_return"]) if r.get("to_return") else "?")
             d.text(P(68, yy + 16), head, font=f(24, True), fill=WHITE)
-            tags = (["BONUS"] if isb else []) + (["PROMO"] if any(g.get("kind") == "promo" for g in legs) else [])
+            tags = (["OFF-BOOK"] if r.get("system_tag") == "OFF" else []) + (["BONUS"] if isb else []) +                    (["PROMO"] if any(g.get("kind") == "promo" for g in legs) else [])
             tx = 940
             for tg in reversed(tags):
                 tf = f(16, True); tl = d.textlength(tg, font=tf) / S
-                col = ORANGE if tg == "BONUS" else GREEN
+                col = ORANGE if tg == "BONUS" else (125, 125, 125) if tg == "OFF-BOOK" else GREEN
                 d.rounded_rectangle(P(tx - tl - 24, yy + 18, tx, yy + 46), radius=14 * S, fill=col)
                 d.text(P(tx - tl - 12, yy + 21), tg, font=tf, fill=BG)
                 tx -= tl + 36
