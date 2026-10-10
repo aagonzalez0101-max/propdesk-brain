@@ -190,57 +190,53 @@ def _dot(hit, n):
 
 def _day(d):
     try:
-        return datetime.date.fromisoformat(d).strftime("%a %m/%d").replace(" 0", " ")
+        x = datetime.date.fromisoformat(d)
+        return "%s %d/%d" % (x.strftime("%a"), x.month, x.day)
     except Exception:
         return d
 
 
 def why_text(leg, S):
-    """10/10 user: phone-sized. Line 1 = colored dots (L10 / season / last season / vs opp), line 2 = matchup + role,
-    line 3 = model, then a warning line only when something argues against the call."""
+    """10/10 user (phone screenshot): one fact per line with an icon -- columns and long lines wrap badly on a phone."""
     sp, line, over = leg["sport"], leg["line"], leg["side"] == "over"
     word = "over" if over else "under"
     es = sp.upper() in ESPORTS
     P = []
     if S:
         opp = leg.get("opp") if es else (leg.get("opp") or "")[:3]
-        dots = ["%s L10 **%d/%d**" % (_dot(S["l10_hit"], len(S["l10"])), S["l10_hit"], len(S["l10"]))]
+        P.append("%s Last 10 · **%d/%d** %s" % (_dot(S["l10_hit"], len(S["l10"])), S["l10_hit"], len(S["l10"]), word))
         if S["seas_n"]:
-            dots.append("%s %s **%d/%d**" % (_dot(S["seas_hit"], S["seas_n"]), "45 days" if es else "Season", S["seas_hit"], S["seas_n"]))
+            P.append("%s %s · **%d/%d**" % (_dot(S["seas_hit"], S["seas_n"]), "Last 45 days" if es else "This season", S["seas_hit"], S["seas_n"]))
         if S["prev_n"]:
-            dots.append("%s %s **%.0f%%**" % (_dot(S["prev_hit"], S["prev_n"]), "Before" if es else "Last yr", 100 * S["prev_hit"] / S["prev_n"]))
+            P.append("%s %s · **%.0f%%**" % (_dot(S["prev_hit"], S["prev_n"]), "Before that" if es else "Last season", 100 * S["prev_hit"] / S["prev_n"]))
         if S["vs_n"]:
-            dots.append("%s vs %s **%d/%d**" % (_dot(S["vs_hit"], S["vs_n"]), opp, S["vs_hit"], S["vs_n"]))
-        P.append(" · ".join(dots))
-        P.append("Last 10: %s  (avg **%.1f**)" % (", ".join("%g" % v for v in S["l10_vals"]), S["l10_avg"]))
-        ctx = []
+            P.append("%s vs %s · **%d/%d**" % (_dot(S["vs_hit"], S["vs_n"]), opp, S["vs_hit"], S["vs_n"]))
+        P.append("")
+        P.append("📊 %s · avg **%.1f**" % (" ".join("%g" % v for v in S["l10_vals"]), S["l10_avg"]))
         if S.get("opp_allowed"):
             n = S["n_teams"]
             tag = " · soft D" if S["opp_rank"] <= n // 3 else " · tight D" if S["opp_rank"] > 2 * n // 3 else ""
-            ctx.append("%s allow **%.1f SOG** (%s most)%s" % (opp, S["opp_allowed"], _ord(S["opp_rank"]), tag))
+            P.append("🛡️ %s allow **%.1f** shots (%s most)%s" % (opp, S["opp_allowed"], _ord(S["opp_rank"]), tag))
         if es:
-            ctx.append("%.0f %s/series" % (S["mins"], "min" if sp.upper().startswith("DOTA") else "rounds"))
+            P.append("⏱️ %.0f %s per series" % (S["mins"], "min" if sp.upper().startswith("DOTA") else "rounds"))
         else:
-            ctx.append("%.1f %s" % (S["mins"], "min TOI" if sp == "NHL" else "min"))
-        ctx.append("last played %s" % _day(S["last"]))
-        P.append(" · ".join(ctx))
+            P.append("⏱️ %.1f %s a game" % (S["mins"], "min TOI" if sp == "NHL" else "min"))
+        P.append("📅 Last played %s" % _day(S["last"]))
     else:
-        P.append("_No game history for this market yet -- the call rests on the model._")
+        P.append("_No game history for this market yet_")
     why = leg.get("why") or ""
     reasons = why.split(":", 1)[-1].split("|")[0].strip() if ":" in why else ""
-    m = "Model **%.0f%%** %s" % (100 * leg["p"], "HIGHER" if over else "LOWER")
-    m += (" · %s: %s" % (why.split(":")[0], reasons)) if reasons else " · projection alone, no extra reason flags"
+    P.append("🤖 Model **%.0f%%** %s" % (100 * leg["p"], "HIGHER" if over else "LOWER"))
+    if reasons:
+        P.append("✅ %s: %s" % (why.split(":")[0], reasons))
     if leg.get("sharp") is not None:
-        m += " · sharp %.0f%%%s" % (100 * leg["sharp"], "" if leg["sharp"] >= 0.5 else " (disagrees)")
-    P.append(m)
+        P.append("💹 Sharp books **%.0f%%**%s" % (100 * leg["sharp"], "" if leg["sharp"] >= 0.5 else " · disagrees"))
     if "RAISED" in why:
-        P.append("📈 PP raised this line today -- raised lines still went over 62%")
+        P.append("📈 PP raised this line today")
     if S and len(S["l10"]) >= 5 and S["l10_hit"] / len(S["l10"]) < 0.5:
-        P.append("⚠️ Only %d of his last %d went %s -- the call leans on the matchup" % (S["l10_hit"], len(S["l10"]), word))
-    if S:
-        days = (datetime.date.today() - datetime.date.fromisoformat(S["last"])).days
-        if days > 10:
-            P.append("⚠️ Last game was %d days ago -- check he's playing" % days)
+        P.append("⚠️ Only %d/%d went %s lately" % (S["l10_hit"], len(S["l10"]), word))
+    if S and (datetime.date.today() - datetime.date.fromisoformat(S["last"])).days > 10:
+        P.append("⚠️ Hasn't played in %d days" % (datetime.date.today() - datetime.date.fromisoformat(S["last"])).days)
     return chr(10).join(P)
 
 
@@ -278,21 +274,23 @@ def post_slip(k, grp, ph, stake=None, mult=6.0, be=0.55):
     bad = [g["player"] for g, S in zip(grp, SS) if S and len(S["l10"]) >= 5 and S["l10_hit"] / len(S["l10"]) < 0.5
            and (not S["prev_n"] or S["prev_hit"] / S["prev_n"] < 0.5)]
     verdict = ("⚠️ SWAP %s FIRST · form and last season both disagree" % " & ".join(bad)) if bad else               "✅ TAKE IT" if value >= 0.15 and weakest >= 0.58 else "🟡 LEAN · small edge" if value > 0 else "⛔ PASS"
-    head = {"title": "🧾 SLIP %d · %d-Pick Power · %gx" % (k, len(grp), mult), "color": 0x1DB954,
-            "description": "## %s\nAll %d hit **%.0f%%** of the time · worth **%+.0f%%** at %gx · break-even %.0f%%/leg, ours avg %.0f%%"
-                           % (verdict, len(grp), 100 * ph, 100 * value, mult, 100 * be, 100 * sum(g["p"] for g in grp) / len(grp)),
-            "fields": [{"name": "Stake", "value": ("$%.2f (5%% of roll)" % stake) if stake else "5% of roll", "inline": True},
-                       {"name": "Pays", "value": ("$%.2f" % (stake * mult)) if stake else "%gx" % mult, "inline": True},
-                       {"name": "Rule", "value": "Confirm each line on your PP screen", "inline": True}]}
+    head = {"title": "🧾 SLIP %d · %d-pick · %gx" % (k, len(grp), mult), "color": 0x1DB954,
+            "description": chr(10).join([
+                "## %s" % verdict,
+                "🎯 All %d hit **%.0f%%** · worth **%+.0f%%**" % (len(grp), 100 * ph, 100 * value),
+                "💵 %s" % (("**$%.2f → $%.2f**" % (stake, stake * mult)) if stake else "5%% of roll at %gx" % mult),
+                "📏 Break-even %.0f%% a leg · ours avg %.0f%%" % (100 * be, 100 * sum(g["p"] for g in grp) / len(grp)),
+                "📱 Confirm each line on your PP screen"])}
     E = [head]
     for g, S in zip(grp, SS):
         over = g["side"] == "over"
-        t = datetime.datetime.fromisoformat(g["start"].replace("Z", "+00:00")).astimezone(CT).strftime("%a %m/%d %I:%M %p") + " TX"
-        e = {"title": "%s  %s · %s" % ("🔺 HIGHER" if over else "🔻 LOWER", g["player"], g["stat"]), "color": 0x1ED760 if over else 0xF3727F,
-             "description": ("## %s %g\n%s" % ("HIGHER than" if over else "LOWER than", g["line"], why_text(g, S)))[:4000],
-             "fields": [{"name": "Model", "value": "%.0f%%" % (100 * g["p"]), "inline": True},
-                        {"name": "Game", "value": "%s vs %s" % (g.get("team") or "", (g.get("opp") or "")[:14]), "inline": True},
-                        {"name": "Start", "value": t, "inline": True}],
+        _t = datetime.datetime.fromisoformat(g["start"].replace("Z", "+00:00")).astimezone(CT)
+        t = "%s %d/%d %s TX" % (_t.strftime("%a"), _t.month, _t.day, _t.strftime("%I:%M %p").lstrip("0"))
+        stat = (g["stat"] or "").replace("Shots On Goal", "SOG").replace("MAPS 1-2 ", "")
+        e = {"title": "%s %s" % ("🔺" if over else "🔻", g["player"]), "color": 0x1ED760 if over else 0xF3727F,
+             "description": chr(10).join(["## %s %g %s" % ("HIGHER" if over else "LOWER", g["line"], stat),
+                                          "🕕 %s · %s vs %s" % (t, g.get("team") or "", (g.get("opp") or "")[:16]), "",
+                                          why_text(g, S)])[:4000],
              "footer": {"text": "PropDesk · %s · PrizePicks" % g["sport"]}}
         img = g.get("img") or headshot(g["player"], g["sport"])
         if img:
