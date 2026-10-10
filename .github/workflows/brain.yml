@@ -21,6 +21,7 @@ jobs:
       PROPDESK_CLOUD: "1"
       PYTHONIOENCODING: utf-8
       CFBD_API_KEY: ${{ secrets.CFBD_API_KEY }}
+      DISCORD_BOT_TOKEN: ${{ secrets.DISCORD_BOT_TOKEN }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5

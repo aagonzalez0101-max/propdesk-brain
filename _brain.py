@@ -80,6 +80,12 @@ def main(minutes):
                 done = {k: v for k, v in done.items() if k[:10] >= (now.date() - datetime.timedelta(days=3)).isoformat()}
                 json.dump(done, open(DONE_F, "w")); sync(); did = True
         if not did:
+            # 10/10: lock/skip reactions on #card slips -> ledger + tracker within a minute; push the bundle when a bet got logged
+            before = os.path.getmtime("live_paper.jsonl") if os.path.exists("live_paper.jsonl") else 0
+            if os.environ.get("DISCORD_BOT_TOKEN"):
+                run(["_reactions.py"], 120)
+            if os.path.exists("live_paper.jsonl") and os.path.getmtime("live_paper.jsonl") != before:
+                sync()
             time.sleep(60)
 
 

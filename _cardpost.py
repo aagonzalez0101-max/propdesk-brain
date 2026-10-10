@@ -262,8 +262,18 @@ def post_slip(k, grp, ph, stake=None, mult=6.0, be=0.55):
     while sum(len(json.dumps(x, ensure_ascii=False)) for x in E) > 5800:      # Discord: 6000 chars per message
         longest = max(E[1:], key=lambda x: len(x["description"]))
         longest["description"] = longest["description"].rsplit("\n", 1)[0]
-    r = requests.post(hook, json={"username": "PropDesk", "embeds": E}, timeout=20)
+    r = requests.post(hook + "?wait=true", json={"username": "PropDesk", "embeds": E}, timeout=20)
     print("discord slip %d: HTTP %s %s" % (k, r.status_code, r.text[:200] if r.status_code >= 300 else ""))
+    # 10/10 user: lock/skip by REACTION (self-roles style) -> remember which message is which slip; _reactions.py does the rest
+    if r.status_code == 200:
+        try:
+            m = r.json()
+            rec = dict(msg_id=m["id"], channel_id=m["channel_id"], posted=datetime.datetime.now(CT).isoformat(timespec="minutes"), mult=mult,
+                       ph=ph, stake=stake, legs=[{k_: g.get(k_) for k_ in ("sport", "player", "team", "opp", "stat", "line", "side", "p", "start")} for g in grp])
+            with open("_slips_posted.jsonl", "a", encoding="utf-8") as f:
+                f.write(json.dumps(rec, ensure_ascii=False) + "\n")
+        except Exception as ex:
+            print("slip record:", ex)
     time.sleep(1)
 
 
