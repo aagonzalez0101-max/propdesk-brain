@@ -121,6 +121,7 @@ def grade(log):
         ("NFL BETA: grade paper legs when nflverse posts the week", ["_nfl_beta_grade.py"], 300),
         ("SLIPS: grade every logged league slip, bet + paper", ["_paper_slips_grade.py"], 600),
         ("NFL: re-test defense-adjusted projections vs raw (turns ON only if proven)", ["_nfl_matchup.py", "test"], 300),
+        ("GATE: grade the legs the form/H2H gate dropped (is it saving us?)", ["_gate_grade.py"], 300),
         ("Discord: projection vs actual for yesterday's legs", ["_projcheck.py", "--post"], 600),
     ]
     for label, args, to in steps:
