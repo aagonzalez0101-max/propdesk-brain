@@ -95,6 +95,21 @@ try:
     _db = _sq.connect("sports.db"); _NG = {}
     for _pl, _js, _d in _db.execute("select player, stats, date from player_games where sport='NFL' and season='2026'"):
         _NG.setdefault(M.norm(_pl), []).append((int(_d[1:]), json.loads(_js)))
+    # 10/10: Shipley U9.5 (Barkley OUT, Bigsby IR -> Shipley leads the backfield) and Coleman U18.5 (WR Douglas OUT) were role-change traps.
+    # Injury context first: no NFL UNDER when a same-team, same-position teammate is Out / Doubtful / IR this week.
+    _OUTPOS = set()
+    try:
+        import requests as _rq
+        _abbr = {}
+        for _t in _rq.get("https://site.api.espn.com/apis/site/v2/sports/football/nfl/teams", timeout=30).json()["sports"][0]["leagues"][0]["teams"]:
+            _abbr[_t["team"]["displayName"]] = _t["team"]["abbreviation"]
+        for _t in _rq.get("https://site.api.espn.com/apis/site/v2/sports/football/nfl/injuries", timeout=30).json().get("injuries", []):
+            for _i in _t.get("injuries", []):
+                if (_i.get("status") or "") in ("Out", "Doubtful", "Injured Reserve"):
+                    _OUTPOS.add((_abbr.get(_t.get("displayName"), ""), ((_i.get("athlete") or {}).get("position") or {}).get("abbreviation")))
+    except Exception as e:
+        print("NFL injuries:", e)
+    _FIX = {"WSH": "WAS", "JAC": "JAX", "LA": "LAR"}
     n_nfl = 0
     for (sp, pl, st), l in live.items():
         if sp != "NFL" or l["stat"] not in NFL_STAT or pl in USED or l.get("kind") != "standard":
@@ -114,6 +129,10 @@ try:
         elif hit == 0.0 and avg <= l["line"] * 0.85:
             side = "under"
         else:
+            continue
+        _pos = games[-1][1].get("position")
+        if side == "under" and ((_FIX.get(l.get("team"), l.get("team")), _pos) in _OUTPOS or (l.get("team"), _pos) in _OUTPOS):
+            print("  dropped (role change: a %s %s teammate is out): %s %s under %s" % (l.get("team"), _pos, l["player"], l["stat"], l["line"]))
             continue
         own = hit if side == "over" else 1 - hit
         std.append(dict(sport="NFL", player=l["player"], team=l.get("team"), opp=l.get("opp"), stat=l["stat"], line=l["line"], side=side,
