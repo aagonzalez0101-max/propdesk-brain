@@ -302,14 +302,29 @@ try:
     side = lambda X: "\n".join("%s **%s** %s %g · %.0f%%" % ("🔺" if x["side"] == "over" else "🔻", x["player"], x["stat"], x["line"], 100 * x["p"])
                                for x in X[:6]) or "none qualified"
     rl = C.roll()
-    C.post_embed("🧾 TODAY'S CARD · %s" % datetime.datetime.now(CT).strftime("%a %m/%d"),
+    # 10/10 cloud line-release scanner: never post the same slip twice; NEW_ONLY runs (every 30 min) stay silent unless a NEW slip qualifies
+    sig = lambda grp_: "|".join(sorted("%s/%s/%s/%s" % (g["player"], g["stat"], g["line"], g["side"]) for g in grp_))
+    posted = set()
+    if os.path.exists("_slips_posted.jsonl"):
+        cut = (datetime.datetime.now(CT) - datetime.timedelta(days=2)).isoformat()
+        for x in open("_slips_posted.jsonl", encoding="utf-8"):
+            if x.strip():
+                rr = json.loads(x)
+                if rr.get("posted", "") >= cut:
+                    posted.add(sig(rr["legs"]))
+    fresh = [t for t in slips if sig(t[1]) not in posted]
+    print("slips: %d qualify, %d new" % (len(slips), len(fresh)))
+    if os.environ.get("NEW_ONLY") and not fresh:
+        raise SystemExit(0)                                            # scanner: nothing new -> no Discord noise
+    slips = fresh
+    C.post_embed(("🆕 NEW LINES · %s" if os.environ.get("NEW_ONLY") else "🧾 TODAY'S CARD · %s") % datetime.datetime.now(CT).strftime("%a %m/%d %I:%M %p"),
                  "**%d slip%s** below%s.\n\n**🔺 OVERS that qualify (%d)**\n%s\n\n**🔻 UNDERS that qualify (%d)**\n%s"
                  % (len(slips), "" if len(slips) == 1 else "s", (" · roll $%.2f · stake $%.2f each" % (rl, 0.05 * rl)) if rl else "",
                     len(_ov), side(_ov), len(_un), side(_un)))
     for k_, grp_, ph_ in slips:
         C.post_slip(k_, grp_, ph_, stake=0.05 * rl if rl else None)
-    if not slips:
-        C.post_embed("🧾 No slip today", "No 3 legs from different teams pass the filter on the live board yet -- wait for more lines, never force a slip.")
+    if not slips and not os.environ.get("NEW_ONLY"):
+        C.post_embed("🧾 No new slip", "No 3 legs from different teams pass the filter on the live board yet -- wait for more lines, never force a slip.")
 except Exception as e:
     print("card post:", e)
 
