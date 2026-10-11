@@ -45,7 +45,9 @@ for l, po, mu, n in sorted(rows, key=lambda x: -abs((x[1] or .5) - .5)):
         print("  %-34s %-5s line %5.1f   no history" % (l["player"][:34], l["team"], l["line"])); continue
     side = "OVER" if po >= .5 else "UNDER"; p = max(po, 1 - po)
     tag = "LEAN" if p >= .62 else ""
-    print("  %-34s %-5s vs %-12s line %5.1f  proj %5.1f  %-5s %3.0f%%  %s  %s" % (l["player"][:34], l["team"], (l.get("opp") or "")[:12], l["line"], mu, side, 100 * p, tag, st))
+    # 10/10: model 81-87% Spirit overs went 6 and 12 kills -> show what this model's confidence ACTUALLY hits (graded paper)
+    real = __import__("_calib_es").cal("dota", p)
+    print("  %-34s %-5s vs %-12s line %5.1f  proj %5.1f  %-5s model %3.0f%% -> real ~%2.0f%%  %s  %s" % (l["player"][:34], l["team"], (l.get("opp") or "")[:12], l["line"], mu, side, 100 * p, 100 * real, tag, st))
     if tag:
         pap.append(dict(date=datetime.datetime.fromisoformat(l["start"]).astimezone(CT).date().isoformat(), player=l["player"], team=l["team"], opp=l.get("opp"),
                         stat=l["stat"], line=l["line"], side=side.lower(), p=round(p, 3), proj=round(mu, 1), start=l["start"], result=None))

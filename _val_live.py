@@ -118,12 +118,13 @@ def card(min_edge=EDGE_FLOOR, max_hours=None):
     rows.sort(key=lambda r: -r["edge"])
     print("history maps %d | priced sides %d | skipped %s | prizepicks lines %d"
           % (len(rows_hist), len(rows), dict(miss), len(PP)))
-    print("%-6s %-6s %-14s %6s %6s %6s %7s %5s  %s" %
-          ("edge", "side", "player", "line", "PP", "chance", "mean", "winp", "match (CT)"))
+    print("%-6s %-6s %-14s %6s %6s %6s %5s %7s %5s  %s" %
+          ("edge", "side", "player", "line", "PP", "chance", "real", "mean", "winp", "match (CT)"))
+    print("  (real = what this model's calls actually hit on graded lines -- 10/10: ~50%, no edge yet)")
     for r in rows[:30]:
-        print("%+5.1f%% %-6s %-14s %6.1f %6s %5.0f%% %7.1f %5.2f  %s %s" % (
+        print("%+5.1f%% %-6s %-14s %6.1f %6s %5.0f%% %4.0f%% %7.1f %5.2f  %s %s" % (
             100 * r["edge"], "under" if r["side"] == "lower" else "over", r["player"][:14], r["line"],
-            r["pp_line"] if r["pp_line"] is not None else "-", 100 * r["model_p"], r["model_mu"],
+            r["pp_line"] if r["pp_line"] is not None else "-", 100 * r["model_p"], 100 * __import__("_calib_es").cal("val", r["model_p"]), r["model_mu"],
             r["map_winp"], r["match"][:28], r["start_ct"]))
 
     picks = [r for r in rows if min_edge <= r["edge"] < EDGE_CAP and not (0.45 <= r["map_winp"] <= 0.55)]

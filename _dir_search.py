@@ -274,7 +274,7 @@ def score():
     leagues = [(8, "NHL"), (3, "WNBA")] + ([(7, "NBA")] if datetime.datetime.now(CT).date().isoformat() >= "2026-10-19" or "--nba" in sys.argv else [])
     for lg, sp in leagues:
         try:
-            for l in P.prizepicks(lg, max_age=1800):
+            for l in P.prizepicks(lg, max_age=int(os.environ.get("PP_MAX_AGE", 1800))):
                 if l.get("kind") != "standard" or "+" in (l.get("player") or "") or l["line"] < 1.5:
                     continue
                 if datetime.datetime.fromisoformat(l["start"]).astimezone(datetime.timezone.utc) < now:

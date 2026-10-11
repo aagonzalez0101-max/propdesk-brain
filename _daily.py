@@ -115,6 +115,7 @@ def grade(log):
         ("grade KBO v2 calls", ["_kbo_model.py", "grade"], 120),
         ("grade yesterday's card", ["_card.py", "grade"], 300),
         ("recalibrate probabilities", ["_calibrate.py"], 120),
+        ("recalibrate esports models vs graded results (CS2/VAL/Dota)", ["_calib_es.py"], 300),
         ("experiment replay (one change at a time)", ["_experiments.py", "replay"], 300),
         ("Discord: update the pinned Road-to-$500 tracker", ["_tracker.py"], 120),
     ]

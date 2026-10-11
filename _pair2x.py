@@ -23,7 +23,7 @@ LG = {"NHL": 8, "WNBA": 3, "NBA": 7, "NFL": 9, "CFB": 15, "CS2": 265}
 live = {}
 for sp, lg in LG.items():
     try:
-        for l in P.prizepicks(lg, max_age=180):                      # 429s at max_age=0 -> a 3-minute-old board is fine
+        for l in P.prizepicks(lg, max_age=int(os.environ.get("PP_MAX_AGE", 180))):                      # 429s at max_age=0 -> a 3-minute-old board is fine
             if l.get("kind") == "standard" and "+" not in (l.get("player") or ""):
                 live[(sp, M.norm(l["player"]), M.norm(l["stat"]))] = l
     except Exception as e:
@@ -76,8 +76,9 @@ if os.path.exists("cs2_paper.jsonl"):
             continue
         seen_cs.add(k)
         coin = 0.45 <= (r.get("map_winp") or 0.5) <= 0.55
+        pc = __import__("_calib_es").cal("cs2", r.get("model_p"))   # 10/10: calibrated -- CS2 calls really hit ~56%, not 62-68%
         std.append(dict(sport="CS2", player=r["player"], team=r.get("team"), opp=r.get("opp"), stat=stat, line=l["line"], side=side,
-                        p=0.62 if coin else 0.68, why="CS2 rule: edge %.1f%%%s" % (100 * e, "" if coin else ", lopsided map (68% tier)"),
+                        p=round(pc or 0.56, 3), why="CS2 rule: edge %.1f%%%s, model %.0f%% -> real ~%.0f%%" % (100 * e, "" if coin else ", lopsided map", 100 * (r.get("model_p") or 0), 100 * (pc or 0.56)),
                         start=l["start"], img=l.get("img")))
 
 # NFL BETA (10/10, user: "make NFL work, I'm not taking another week without it"). Measured on 1,067 graded PP lines (Week 4-5 2026):
