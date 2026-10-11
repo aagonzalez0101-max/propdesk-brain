@@ -251,6 +251,43 @@ try:
 except Exception as e:
     print("soccer legs:", e)
 
+# 10/11 user ("these were paper but you'd still say 0"): the NHL screen's UNDERS are a BET market -- graded 9/30-10/10 at standard
+# payouts: TAKE UNDER 29-11 (72.5%), LEAN UNDER 58-34 (63%); its OVERS are 52% (no edge) and stay out. The screen prices Underdog
+# lines, so a call counts only if PrizePicks has the same player+stat at the SAME or HIGHER line (equal or better for an under).
+# Leg p = the measured tier rate, shaded down (TAKE 0.70, LEAN 0.62), not the model's own number.
+try:
+    _have = {M.norm(s_["player"]) for s_ in std}
+    _days = {today, (datetime.date.fromisoformat(today) + datetime.timedelta(days=1)).isoformat()}
+    _nu = {}
+    for x in open("calls_log.jsonl", encoding="utf-8"):
+        r = json.loads(x)
+        if r.get("sport") != "NHL" or r.get("date") not in _days or r.get("call") not in ("TAKE UNDER", "LEAN UNDER") or not r.get("start"):
+            continue
+        if r.get("kind") not in (None, "standard"):
+            continue
+        _m = r.get("mult")
+        if isinstance(_m, dict):
+            _m = _m.get("under")
+        if r.get("venue") == "UD" and _m is not None and not (0.85 <= _m <= 1.15):
+            continue                                                   # shifted UD lines weren't in the measured record
+        k = (M.norm(r["player"]), M.norm(r["stat"]))
+        if k not in _nu or r["call"] == "TAKE UNDER":
+            _nu[k] = r
+    for (pn, sn), r in _nu.items():
+        if pn in _have or datetime.datetime.fromisoformat(r["start"].replace("Z", "+00:00")).astimezone(datetime.timezone.utc) < now:
+            continue
+        lv = live.get(("NHL", pn, sn)) or (live.get(("NHL", pn, "goaliesaves")) if "save" in sn else None)
+        if not lv or float(lv["line"]) < float(r["line"]):
+            continue
+        tk = r["call"] == "TAKE UNDER"
+        std.append(dict(sport="NHL", nhl_under=True, player=lv["player"], team=lv.get("team") or r.get("team"), opp=lv.get("opp") or r.get("opp"),
+                        stat=lv["stat"], line=lv["line"], side="under", p=0.70 if tk else 0.62, start=lv["start"],
+                        why="NHL screen %s (measured %s): avg %s, h2h %s" % (r["call"], "29-11, 72.5%%" if tk else "58-34, 63%%", r.get("adj_mean") or r.get("avg"), r.get("h2h"))))
+        _have.add(pn)
+        print("  NHL UNDER leg: %s %s U%s (%s, called at %s)" % (lv["player"], lv["stat"], lv["line"], r["call"], r["line"]))
+except Exception as e:
+    print("nhl unders:", e)
+
 # sharp check on the STANDARD leg: a Pinnacle/FanDuel price that disagrees with our side by 5+ pts drops it (Gauthier 10/9: 51%)
 PINS = {}
 for sp in ("NHL", "WNBA", "NBA", "NFL", "CFB"):
@@ -444,7 +481,7 @@ except Exception as e:
 # A slip is a 💰 BET only if every leg comes from a proven market (promo, NHL/WNBA direction filter, NFL BETA); otherwise 📝 PAPER --
 # paper slips are logged + graded every day so every league keeps building a record ("I want everything to pass even if we don't bet").
 FAM = lambda s: "ESPORTS" if s["sport"] in ("CS2", "VAL", "Dota2", "LoL") else s["sport"]
-money_ok = lambda s: bool(s.get("promo")) or bool(s.get("beta")) or bool(s.get("soccer_hit")) or (s["sport"] in ("NHL", "WNBA") and not s.get("paper"))
+money_ok = lambda s: bool(s.get("promo")) or bool(s.get("beta")) or bool(s.get("soccer_hit")) or bool(s.get("nhl_under")) or (s["sport"] in ("NHL", "WNBA") and not s.get("paper"))
 CRAZY = lambda s: bool(s.get("promo")) or s["p"] >= 0.66
 by_fam = collections.defaultdict(list)
 for s in sorted(std, key=lambda s: -s["p"]):
