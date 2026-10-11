@@ -123,28 +123,54 @@ def download(a, path):
             f.write(c)
 
 
-def push(force=False, cloud=False):
+def merge_ledger(local_txt, remote_txt):
+    """10/11: laptop and cloud both write live_paper.jsonl (laptop logs bets, cloud grades them). Union by (ts, selection); when both
+    sides have a row, keep the one with the result filled (graded beats pending); else the local copy."""
+    def rows(t):
+        out = {}
+        for l in t.splitlines():
+            if l.strip():
+                r = json.loads(l)
+                out[(r.get("ts"), r.get("selection"))] = r
+        return out
+    L, R = rows(local_txt), rows(remote_txt)
+    for k, r in R.items():
+        if k not in L or (L[k].get("result") is None and r.get("result") is not None):
+            L[k] = r
+    NL = chr(10)
+    return NL.join(json.dumps(r, ensure_ascii=False) for r in sorted(L.values(), key=lambda r: r.get("ts") or "")) + NL
+
+
+def push(force=False, cloud=False, _retry=True):
     rel = release(); a = remote_asset(rel)
     st = json.load(open(STATE)) if os.path.exists(STATE) else {}
     changed = a and st.get("pulled_updated") and a["updated_at"] != st["pulled_updated"]
-    if changed and cloud:
-        # the laptop pushed while this cloud run worked: take ITS bet ledger + road, keep everything else from the cloud
+    if changed and not force:
+        # someone else uploaded since our last sync -> merge instead of refusing or overwriting
         download(a, "_remote.tar.gz")
         with tarfile.open("_remote.tar.gz", "r:gz") as t:
             for m in t.getmembers():
-                if m.name in LAPTOP_OWNED:
+                if m.name == "live_paper.jsonl":
+                    remote = t.extractfile(m).read().decode("utf-8")
+                    local = open("live_paper.jsonl", encoding="utf-8").read() if os.path.exists("live_paper.jsonl") else ""
+                    open("live_paper.jsonl", "w", encoding="utf-8").write(merge_ledger(local, remote))
+                elif m.name == "road.json":
+                    if cloud:                                       # the laptop owns road.json
+                        t.extract(m, ".", filter="data")
+                elif not cloud:                                     # laptop push: everything else = the cloud's newer copy
                     t.extract(m, ".", filter="data")
         os.remove("_remote.tar.gz")
-        print("merged laptop-owned files from the newer remote bundle:", LAPTOP_OWNED)
-    elif changed and not force:
-        raise SystemExit("cloud bundle changed since your last pull (%s) -- run `python _bundle.py pull` first" % a["updated_at"])
+        print("merged with the newer remote bundle (%s): bet ledger row-merged" % a["updated_at"])
     pack(ASSET)
     if a:
         api("https://api.github.com/repos/%s/releases/assets/%d" % (REPO, a["id"]), "DELETE")
     up = rel["upload_url"].split("{")[0] + "?name=" + ASSET
     res = api(up, "POST", open(ASSET, "rb").read(), "application/gzip")
-    json.dump({"pulled_updated": res["updated_at"]}, open(STATE, "w"))
     os.remove(ASSET)
+    if not res and _retry:                                       # the other side uploaded at the same moment -> merge again once
+        print("upload collided -- retrying with a fresh merge")
+        return push(force, cloud, _retry=False)
+    json.dump({"pulled_updated": res["updated_at"]}, open(STATE, "w"))
     print("pushed bundle (%s)" % res["updated_at"])
 
 
