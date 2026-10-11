@@ -313,6 +313,14 @@ try:
                 if rr.get("posted", "") >= cut:
                     posted.add(sig(rr["legs"]))
     fresh = [t for t in slips if sig(t[1]) not in posted]
+    # 10/10 user: "5 bets max" a day -- count today's real bets + slips already posted today; post only what fits, best value first
+    _today = datetime.datetime.now(CT).date().isoformat()
+    _bets = sum(1 for x in open("live_paper.jsonl", encoding="utf-8") if x.strip() and json.loads(x).get("kind") == "LIVE" and json.loads(x).get("date") == _today)
+    _cards = sum(1 for x in open("_slips_posted.jsonl", encoding="utf-8") if x.strip() and json.loads(x).get("posted", "")[:10] == _today)         if os.path.exists("_slips_posted.jsonl") else 0
+    room = max(0, 5 - max(_bets, _cards))
+    fresh = sorted(fresh, key=lambda t: -t[2])[:room]
+    if room == 0:
+        print("daily cap reached (5 bets/slips today) -- nothing new posted")
     print("slips: %d qualify, %d new" % (len(slips), len(fresh)))
     if os.environ.get("NEW_ONLY") and not fresh:
         raise SystemExit(0)                                            # scanner: nothing new -> no Discord noise
