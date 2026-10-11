@@ -137,6 +137,24 @@ try:
         if side == "under" and ((_FIX.get(l.get("team"), l.get("team")), _pos) in _OUTPOS or (l.get("team"), _pos) in _OUTPOS):
             print("  dropped (role change: a %s %s teammate is out): %s %s under %s" % (l.get("team"), _pos, l["player"], l["stat"], l["line"]))
             continue
+        if l["stat"] == "Fantasy Score":                # 10/11 Hutchinson: no Pinnacle FS market -> implied FS from FanDuel catches + yards
+            try:
+                import _fanduel as _F2
+                if "_FDP" not in globals():
+                    globals()["_FDP"] = _F2.props("nfl")
+                def _med(st_):
+                    R_ = sorted((ln_, po_) for (a_, b_, ln_), po_ in _FDP.items() if a_ == pl and b_ == st_)
+                    for (l0, p0), (l1, p1) in zip(R_, R_[1:]):
+                        if p0 >= 0.5 >= p1:
+                            return l0 + (l1 - l0) * (p0 - 0.5) / max(p0 - p1, 1e-9)
+                    return None
+                rec, ry, ru, py = _med("receptions"), _med("receiving yards"), _med("rushing yards"), _med("passing yards")
+                if any(v is not None for v in (rec, ry, ru, py)):
+                    impl = (rec or 0) + 0.1 * ((ry or 0) + (ru or 0)) + 0.04 * (py or 0)
+                    if (side == "over" and impl < l["line"] * 0.95) or (side == "under" and impl > l["line"] * 1.05):
+                        print("  dropped (FanDuel implied fantasy %.1f vs line %s): %s %s" % (impl, l["line"], l["player"], side)); continue
+            except Exception as e:
+                print("fd fantasy:", e)
         own = hit if side == "over" else 1 - hit
         std.append(dict(sport="NFL", player=l["player"], team=l.get("team"), opp=l.get("opp"), stat=l["stat"], line=l["line"], side=side,
                         p=0.61, why="NFL BETA own-rate: %d of %d games %s, avg %.1f (1 week measured: 61%%, holdout 49%%)"

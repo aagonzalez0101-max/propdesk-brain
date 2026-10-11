@@ -268,6 +268,15 @@ def why_text(leg, S):
         else:
             P.append("⏱️ %.1f %s a game" % (S["mins"], "min TOI" if sp == "NHL" else "touches/targets" if sp == "NFL" else "min"))
         P.append("📅 Last played %s" % _day(S["last"]))
+        if sp == "NFL":                                   # 10/11 user: usual -> how this defense holds -> what that means (info only until proven)
+            try:
+                import _nfl_matchup as _NM
+                mu = _NM.matchup(leg["player"], leg["stat"], (leg.get("opp") or "")[:3].upper())
+                if mu:
+                    P.append("🛡️ %s allows **%.0f** %s/game to %ss (%s most) · usual %.1f → matchup proj **%.1f** _(info only: NFL matchups test 55%% vs 57%% raw)_"
+                             % ((leg.get("opp") or "")[:3].upper(), mu["allowed"], leg["stat"].lower(), mu["pos"], _ord(mu["rank"]) if mu["rank"] else "?", mu["avg"], mu["proj"]))
+            except Exception:
+                pass
     else:
         P.append("_No game history for this market yet_")
     why = leg.get("why") or ""
