@@ -267,9 +267,24 @@ for s in sorted(std, key=lambda s: -s["p"]):
 if not n:
     print("  no standard leg from our filters is live on PP right now")
 
-# 3-PICK POWER (6x) from the same standard pool: 1 leg per team across ALL slips, legs from 3 different games
+# 10/10 smartest-path ordering (user OK'd): PROMO-anchored 3-picks first (promo ~0.9 + 2 model legs = the best bet we have), then
+# direction legs, NFL BETA, and CS2 last (thin ~56%) with at most ONE CS2 leg per slip. 1 leg per team across all slips.
+try:
+    import _promos as _PR
+    for pm in _PR.promos():
+        if pm.get("promo_line") is None or M.norm(pm.get("player")) in USED:
+            continue
+        _ps = datetime.datetime.fromisoformat(pm["start"]).astimezone(datetime.timezone.utc)
+        if _ps < now or _ps > now + datetime.timedelta(hours=36):
+            continue                                                   # promo must play soon (Edwards' 10/21 free square would lock a slip 11 days)
+        std.append(dict(sport=pm["league"], player=pm["player"], team=pm.get("team"), opp=pm.get("opp"), stat=pm["stat"],
+                        line=pm["promo_line"], side="over", p=0.90, why="PROMO: %s -> %s (%s)" % (pm["line"], pm["promo_line"], pm.get("kind")),
+                        start=pm["start"], promo=True))
+except Exception as e:
+    print("promo legs:", e)
+_rank = lambda s: (0 if s.get("promo") else 1 if s["sport"] in ("NHL", "WNBA", "NBA") else 2 if s.get("beta") else 3 if s["sport"] == "CS2" else 2, -s["p"])
 pool, seen_t = [], set()
-for s in sorted(std, key=lambda s: -s["p"]):
+for s in sorted(std, key=_rank):
     if s["team"] not in seen_t:
         seen_t.add(s["team"]); pool.append(s)
 print("\n3-PICK POWER 6x (needs 55%%/leg; 1 leg per team across all slips) -- %d eligible legs" % len(pool))
@@ -277,6 +292,10 @@ k = 0; slips_txt = []; slips = []
 while len(pool) >= 3:
     a = pool.pop(0); grp = [a]
     for x in list(pool):
+        if x["sport"] == "CS2" and any(g["sport"] == "CS2" for g in grp):
+            continue                                                   # max one thin CS2 leg per slip
+        if x.get("promo") and any(g.get("promo") for g in grp):
+            continue                                                   # one promo per slip (PP limits promo stacking)
         if all({x["team"], x.get("opp")} != {g["team"], g.get("opp")} for g in grp):
             grp.append(x); pool.remove(x)
         if len(grp) == 3:
