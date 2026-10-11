@@ -229,15 +229,20 @@ try:
         stk = M.STAT.get(M.norm(l["stat"]))
         if not stk:
             continue
-        po = None
         R = PINS.get((sp, pl, stk))
-        if R:
-            po = M.p_over_at(R, l["line"], stk)
-        if po is None and sp in ("NFL", "CFB"):
-            po = _fd_at(sp, pl, stk, l["line"])
-        if po is None:
+        p_pin = M.p_over_at(R, l["line"], stk) if R else None
+        p_fd = _fd_at(sp, pl, stk, l["line"]) if sp in ("NFL", "CFB") else None
+        have = [x for x in (p_pin, p_fd) if x is not None]
+        if not have:
             continue
+        if len(have) == 2 and abs(p_pin - p_fd) > 0.08:
+            continue                                   # 10/10 Bourne: Pinnacle-extrapolated 28% vs FanDuel 47% -> books disagree = bug, not edge
+        po = min(have, key=lambda x: abs(x - 0.5))      # the LESS extreme of the two books
         side, pp = ("over", po) if po >= 0.5 else ("under", 1 - po)
+        if side == "under" and sp == "NFL":             # 10/10 Bourne: WR1 Harrison OUT -> his role grows; same guard as NFL BETA
+            _ps = (sorted(_NG.get(pl, []), key=lambda t: t[0])[-1][1].get("position") if _NG.get(pl) else None) if "_NG" in globals() else None
+            if _ps and (((_FIX.get(l.get("team"), l.get("team")), _ps) in _OUTPOS) or ((l.get("team"), _ps) in _OUTPOS)):
+                continue
         key = "%s|%s|%s|%s" % (l["player"], l["stat"], l["line"], side)
         if pp >= 0.62 and key not in _seen_soft:
             soft.append((pp, l, side)); _seen_soft.add(key)
@@ -251,6 +256,8 @@ try:
                         datetime.datetime.fromisoformat(l["start"]).astimezone(CT).strftime("%a %I:%M %p TX")) for pp, l, sd in soft[:12]))
         _C.post_embed("⚡ SOFT LINES · PrizePicks vs the sharp books", body, 0xFFA42B)
         print("SOFT LINES posted:", len(soft))
+        for pp, l, sd in soft:
+            print("  SOFT: %s %s %s %g sharp %.1f%% start %s" % (l["player"], sd.upper(), l["stat"], l["line"], 100 * pp, l["start"]))
     json.dump(sorted(_seen_soft)[-5000:], open(_SOFT_F, "w"))
 except Exception as e:
     print("soft lines:", e)
