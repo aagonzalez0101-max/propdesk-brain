@@ -15,7 +15,8 @@ day = (datetime.date.today() - datetime.date.fromisoformat(S)).days + 1
 pct = 100 * (bal - R["start_roll"]) / (G - R["start_roll"])
 print("ROAD TO $%d  --  day %d   start $%.2f -> now $%.2f   (%+.2f)   %.0f%% of the way" % (G, max(day, 0), R["start_roll"], bal, bal - R["start_roll"], max(pct, 0)))
 bar = int(max(0, min(1, (bal - R["start_roll"]) / (G - R["start_roll"]))) * 30)
-print("[" + "#" * bar + "-" * (30 - bar) + "]   today's stake (5%%): $%.2f" % (R["stake_pct"] * bal))
+_morning = R["start_roll"] + sum(x.get("net") or 0 for x in done if x["date"] < datetime.date.today().isoformat())   # stake fixed on the morning roll
+print("[" + "#" * bar + "-" * (30 - bar) + "]   today's stake (5%% of the morning roll $%.2f): $%.2f" % (_morning, R["stake_pct"] * _morning))
 by = collections.defaultdict(list)
 for r in done: by[r["date"]].append(r)
 run = R["start_roll"]

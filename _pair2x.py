@@ -441,6 +441,12 @@ for fam in sorted(by_fam, key=lambda f: -max(s["p"] for s in by_fam[f])):
             grp, mult = g2, 3.0
     if not grp:
         continue
+    # 10/11 real record: PP 2-leg 7-9 (+$22.10) vs 3-leg 0-11 (-$17.90) -> BET slips are 2-picks (best two legs, promo first);
+    # the 3-pick version is still logged as PAPER-3 so 3s can earn their way back
+    if len(grp) == 3 and all(money_ok(g) for g in grp):
+        p3 = grp[0]["p"] * grp[1]["p"] * grp[2]["p"]
+        k += 1; slips.append((k, list(grp), p3, 6.0, "PAPER", fam + " (3-pick version)"))
+        grp, mult = sorted(grp, key=lambda g: (not g.get("promo"), -g["p"]))[:2], 3.0
     for g in grp:
         used_leg.add(id(g)); used_team.add(g["team"])
     ph = 1.0

@@ -183,7 +183,7 @@ def build():
         desc.append("**By type:** " + " · ".join(rows))
     return {"title": "🛣️ ROAD TO $%d" % G, "description": "\n".join(desc)[:4000], "color": 0x1ED760 if bal >= start else 0xF3727F,
             "image": {"url": "attachment://road.png"},
-            "_png": render_dashboard(bal, start, G, day, w, l, 0.05 * bal, op, cash_risk, bonus),
+            "_png": render_dashboard(bal, start, G, day, w, l, 0.05 * (start + sum(r.get("net") or 0 for r in done if r["date"] < datetime.datetime.now(CT).date().isoformat())), op, cash_risk, bonus),
             "footer": {"text": "PropDesk · updated %s TX · pin this message" % datetime.datetime.now(CT).strftime("%a %m/%d %I:%M %p")}}
 
 
