@@ -84,7 +84,14 @@ def api(url, method="GET", data=None, ctype="application/json", raw=False):
 
 
 def release():
-    rel = api("https://api.github.com/repos/%s/releases/tags/%s" % (REPO, TAG))
+    try:
+        rel = api("https://api.github.com/repos/%s/releases/tags/%s" % (REPO, TAG))
+    except Exception:
+        rel = None
+    if rel is None and not os.environ.get("GH_TOKEN"):   # no login available: read the public release anonymously
+        rel = json.loads(urllib.request.urlopen(urllib.request.Request("https://api.github.com/repos/%s/releases/tags/%s" % (REPO, TAG),
+                                                                       headers={"User-Agent": "propdesk"}), timeout=60).read())
+        return rel
     if rel is None:
         rel = api("https://api.github.com/repos/%s/releases" % REPO, "POST",
                   json.dumps({"tag_name": TAG, "name": "data bundle", "body": "PropDesk data -- written by _bundle.py, do not edit by hand"}).encode())
@@ -99,7 +106,15 @@ LAPTOP_OWNED = ("live_paper.jsonl", "road.json")   # bets are logged on the lapt
 
 
 def download(a, path):
-    req = urllib.request.Request(a["url"], headers={"Authorization": "Bearer " + token(), "Accept": "application/octet-stream", "User-Agent": "propdesk"})
+    tok = None
+    try:
+        tok = token()
+    except Exception:
+        tok = None
+    if tok:
+        req = urllib.request.Request(a["url"], headers={"Authorization": "Bearer " + tok, "Accept": "application/octet-stream", "User-Agent": "propdesk"})
+    else:                                                    # 10/10: public repo -> a cloud/phone session can pull without any login
+        req = urllib.request.Request(a["browser_download_url"], headers={"User-Agent": "propdesk"})
     with urllib.request.urlopen(req, timeout=1800) as r, open(path, "wb") as f:
         while True:
             c = r.read(1 << 20)
