@@ -7,7 +7,12 @@ import json, re, collections, datetime
 
 norm = lambda s: re.sub(r"[^a-z0-9]", "", (s or "").lower())
 F = "gate_drops.jsonl"
-D = [json.loads(x) for x in open(F, encoding="utf-8") if x.strip()]
+D, _seen = [], set()
+for x in open(F, encoding="utf-8"):                         # 10/11: the card runs every 15 min and re-logged each drop -> one row per leg
+    if x.strip():
+        d = json.loads(x); k = (d["date"], d["sport"], d["player"], d["stat"], d["line"], d["model_side"])
+        if k not in _seen:
+            _seen.add(k); D.append(d)
 A = {}
 for x in open("calls_log.jsonl", encoding="utf-8"):
     r = json.loads(x)

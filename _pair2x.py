@@ -204,6 +204,13 @@ try:
             if why_drop:
                 print("  dropped (%s): %s %s %s %s" % (why_drop, s_["player"], s_["stat"], s_["side"], s_["line"]))
                 # 10/10 user: log every dropped leg BOTH ways on paper -- model side vs the flip -- to measure who is right
+                _gk = "%s|%s|%s|%s|%s" % (today, s_["player"], s_["stat"], s_["line"], s_["side"])
+                if "_GSEEN" not in globals():
+                    globals()["_GSEEN"] = {"%s|%s|%s|%s|%s" % (d_["date"], d_["player"], d_["stat"], d_["line"], d_["model_side"])
+                                           for d_ in (json.loads(x_) for x_ in open("gate_drops.jsonl", encoding="utf-8") if x_.strip())} if os.path.exists("gate_drops.jsonl") else set()
+                if _gk in _GSEEN:
+                    continue
+                _GSEEN.add(_gk)
                 with open("gate_drops.jsonl", "a", encoding="utf-8") as gf:
                     gf.write(json.dumps(dict(date=today, sport=s_["sport"], player=s_["player"], stat=s_["stat"], line=s_["line"],
                                              model_side=s_["side"], flip_side="under" if s_["side"] == "over" else "over", reason=why_drop,
