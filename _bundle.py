@@ -141,6 +141,27 @@ def merge_ledger(local_txt, remote_txt):
     return NL.join(json.dumps(r, ensure_ascii=False) for r in sorted(L.values(), key=lambda r: r.get("ts") or "")) + NL
 
 
+# 10/11: paper files are written on BOTH sides too (laptop logs, cloud grades) -> row-merge them like the ledger, never overwrite.
+# key = what makes a row unique; a graded row beats an ungraded one.
+MERGE_KEYS = {
+    "paper_slips.jsonl": lambda r: (r.get("sig"), (r.get("logged") or "")[:10]),
+    "gate_drops.jsonl": lambda r: (r.get("date"), r.get("sport"), r.get("player"), r.get("stat"), r.get("line"), r.get("model_side")),
+    "nfl_beta_paper.jsonl": lambda r: (r.get("date") or r.get("logged"), r.get("player"), r.get("stat"), r.get("line"), r.get("side")),
+}
+
+
+def merge_rows(local_txt, remote_txt, key):
+    out = {}
+    for t in (local_txt, remote_txt):
+        for l in t.splitlines():
+            if l.strip():
+                r = json.loads(l); k = key(r)
+                if k not in out or (out[k].get("result") is None and r.get("result") is not None):
+                    out[k] = r
+    NL = chr(10)
+    return NL.join(json.dumps(r, ensure_ascii=False) for r in out.values()) + NL
+
+
 def push(force=False, cloud=False, _retry=True):
     rel = release(); a = remote_asset(rel)
     st = json.load(open(STATE)) if os.path.exists(STATE) else {}
@@ -154,6 +175,10 @@ def push(force=False, cloud=False, _retry=True):
                     remote = t.extractfile(m).read().decode("utf-8")
                     local = open("live_paper.jsonl", encoding="utf-8").read() if os.path.exists("live_paper.jsonl") else ""
                     open("live_paper.jsonl", "w", encoding="utf-8").write(merge_ledger(local, remote))
+                elif m.name in MERGE_KEYS:
+                    remote = t.extractfile(m).read().decode("utf-8")
+                    local = open(m.name, encoding="utf-8").read() if os.path.exists(m.name) else ""
+                    open(m.name, "w", encoding="utf-8").write(merge_rows(local, remote, MERGE_KEYS[m.name]))
                 elif m.name == "road.json":
                     if cloud:                                       # the laptop owns road.json
                         t.extract(m, ".", filter="data")
@@ -182,9 +207,14 @@ def pull():
     if not a:
         raise SystemExit("no bundle in the release yet")
     download(a, ASSET)
+    # 10/11: a pull overwrote a paper slip logged locally minutes earlier -> keep local rows, merge them back in after unpacking
+    keep = {f: open(f, encoding="utf-8").read() for f in ["live_paper.jsonl"] + list(MERGE_KEYS) if os.path.exists(f)}
     unpack(ASSET); os.remove(ASSET)
+    for f, local in keep.items():
+        remote = open(f, encoding="utf-8").read() if os.path.exists(f) else ""
+        open(f, "w", encoding="utf-8").write(merge_ledger(local, remote) if f == "live_paper.jsonl" else merge_rows(local, remote, MERGE_KEYS[f]))
     json.dump({"pulled_updated": a["updated_at"]}, open(STATE, "w"))
-    print("pulled bundle (%s)" % a["updated_at"])
+    print("pulled bundle (%s), ledger + paper files row-merged" % a["updated_at"])
 
 
 COLD = ("_fotmob", "_img_cache", "_site_cache")      # big refetchable caches: seeded once, then kept in the cloud's Actions cache
