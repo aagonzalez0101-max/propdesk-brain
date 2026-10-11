@@ -197,6 +197,64 @@ for sp in ("NHL", "WNBA", "NBA", "NFL", "CFB"):
             PINS.setdefault((sp, pl, st), []).append((ln, pr))
     except Exception:
         pass
+# ⚡ SOFT LINE detector (10/10, user: "like Puka over 6 targets -- it was literally removed"). PP posts a mispriced number, then pulls it.
+# Every scan: every live PP standard line vs the sharp fair price AT PP'S NUMBER (Pinnacle props + FanDuel ladders, interpolated between
+# rungs). One side >= 62% (2-pick b/e 57.7%) -> post it NOW, once. Market EV: no model needed, the sharp books are the reference.
+try:
+    import _fanduel as _FD, bisect
+    _SOFT_F = "_soft_seen.json"
+    _seen_soft = set(json.load(open(_SOFT_F))) if os.path.exists(_SOFT_F) else set()
+    _fd = {}
+    for _lg in ("nfl", "cfb"):
+        try:
+            for (_pl, _st, _ln), _po in _FD.props(_lg).items():
+                _fd.setdefault((_lg.upper(), _pl, _st), []).append((_ln, _po))
+        except Exception as e:
+            print("fanduel", _lg, e)
+
+    def _fd_at(sp, pl, st, line):
+        R = sorted(_fd.get((sp, pl, st), []))
+        if len(R) < 2 or not (R[0][0] <= line <= R[-1][0]):
+            return next((po for ln, po in R if ln == line), None)
+        i = bisect.bisect_left([r[0] for r in R], line)
+        if R[i][0] == line:
+            return R[i][1]
+        (l0, p0), (l1, p1) = R[i - 1], R[i]
+        return p0 + (p1 - p0) * (line - l0) / (l1 - l0)
+
+    soft = []
+    for (sp, pl, st), l in live.items():
+        if l.get("kind") != "standard" or datetime.datetime.fromisoformat(l["start"]).astimezone(datetime.timezone.utc) < now:
+            continue
+        stk = M.STAT.get(M.norm(l["stat"]))
+        if not stk:
+            continue
+        po = None
+        R = PINS.get((sp, pl, stk))
+        if R:
+            po = M.p_over_at(R, l["line"], stk)
+        if po is None and sp in ("NFL", "CFB"):
+            po = _fd_at(sp, pl, stk, l["line"])
+        if po is None:
+            continue
+        side, pp = ("over", po) if po >= 0.5 else ("under", 1 - po)
+        key = "%s|%s|%s|%s" % (l["player"], l["stat"], l["line"], side)
+        if pp >= 0.62 and key not in _seen_soft:
+            soft.append((pp, l, side)); _seen_soft.add(key)
+    if soft:
+        import _cardpost as _C
+        soft.sort(key=lambda t: -t[0])
+        NL = chr(10)
+        body = ("Sharp books make one side **62%+** at PrizePicks' exact number (2-pick needs 57.7%). These get pulled fast -- "
+                "check your screen and lock early." + NL + NL +
+                NL.join("⚡ **%s** %s %s %g · sharp **%.0f%%** · %s" % (l["player"], "HIGHER" if sd == "over" else "LOWER", l["stat"], l["line"], 100 * pp,
+                        datetime.datetime.fromisoformat(l["start"]).astimezone(CT).strftime("%a %I:%M %p TX")) for pp, l, sd in soft[:12]))
+        _C.post_embed("⚡ SOFT LINES · PrizePicks vs the sharp books", body, 0xFFA42B)
+        print("SOFT LINES posted:", len(soft))
+    json.dump(sorted(_seen_soft)[-5000:], open(_SOFT_F, "w"))
+except Exception as e:
+    print("soft lines:", e)
+
 keep = []
 for s_ in std:
     st = M.STAT.get(M.norm(s_["stat"])); R = PINS.get((s_["sport"], M.norm(s_["player"]), st)) if st else None

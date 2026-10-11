@@ -80,6 +80,7 @@ def lines(day, log):
         ("DOTA 2 kills projections (paper)", ["_dota_proj.py"], 600),
         ("sharp-priced standard board (both sides)", ["_sharp_board.py", "standard"], 1500),
         ("CARD: standard+goblin 2x pairs and 3-pick 6x (PP lines first)", ["_pair2x.py"], 1800),
+        ("ALT LADDER: 80-90% FanDuel rungs for sportsbook parlays (NFL)", ["_altboard.py", "--post"], 600),
         ("overseas basketball: archive Pinnacle lines", ["_intl_hoops.py", "snap"], 300),
         ("site: page build + log reads", ["_site_build2.py"], 600),
     ]
