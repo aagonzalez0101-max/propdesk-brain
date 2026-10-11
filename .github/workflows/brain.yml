@@ -45,7 +45,11 @@ jobs:
         id: pull
         run: python _bundle.py pull
       - name: Discord webhook (#card) from secret
-        run: python -c "import json,os; json.dump({'discord_webhook': os.environ['W'], 'tracker_webhook': os.environ['T']}, open('notify.json','w'))"
+        run: |
+          python - <<'PY'
+          import json, os
+          json.dump({"discord_webhook": os.environ["W"], "tracker_webhook": os.environ["T"]}, open("notify.json", "w"))
+          PY
         env:
           W: ${{ secrets.CARD_WEBHOOK }}
           T: ${{ secrets.TRACKER_WEBHOOK }}
