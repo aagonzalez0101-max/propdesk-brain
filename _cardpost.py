@@ -255,6 +255,10 @@ def why_text(leg, S):
             P.append("%s vs %s · **%d/%d**" % (_dot(S["vs_hit"], S["vs_n"]), opp, S["vs_hit"], S["vs_n"]))
         P.append("")
         P.append("📊 %s · avg **%.1f**" % (" ".join("%g" % v for v in S["l10_vals"]), S["l10_avg"]))
+        # 10/10: Hronek U1.5 had proj 2.1 -> show projection vs line every time (proj on the wrong side of the line = flag)
+        pj = leg.get("proj") if leg.get("proj") is not None else S["l10_avg"]
+        good = (pj > line) if over else (pj < line)
+        P.append("📏 Projection **%.1f** vs line %g · %s" % (pj, line, "✅ on our side" if good else "⚠️ projection is on the OTHER side of the line"))
         if S.get("opp_allowed"):
             n = S["n_teams"]
             tag = " · soft D" if S["opp_rank"] <= n // 3 else " · tight D" if S["opp_rank"] > 2 * n // 3 else ""
