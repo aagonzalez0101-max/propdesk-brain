@@ -118,6 +118,7 @@ def grade(log):
         ("recalibrate esports models vs graded results (CS2/VAL/Dota)", ["_calib_es.py"], 300),
         ("experiment replay (one change at a time)", ["_experiments.py", "replay"], 300),
         ("Discord: update the pinned Road-to-$500 tracker", ["_tracker.py"], 120),
+        ("Discord: projection vs actual for yesterday's legs", ["_projcheck.py", "--post"], 600),
     ]
     for label, args, to in steps:
         run(label, args, to, log)
