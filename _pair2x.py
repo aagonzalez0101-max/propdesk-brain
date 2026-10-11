@@ -17,7 +17,7 @@ except Exception:
     CT = datetime.timezone(datetime.timedelta(hours=-5))
 now = datetime.datetime.now(datetime.timezone.utc)
 today = datetime.datetime.now(CT).date().isoformat()
-LG = {"NHL": 8, "WNBA": 3, "NBA": 7, "NFL": 9, "CFB": 15, "CS2": 265}
+LG = {"NHL": 8, "WNBA": 3, "NBA": 7, "NFL": 9, "CFB": 15, "CS2": 265, "SOCCER": 82}
 
 # live PP standard board
 live = {}
@@ -227,6 +227,30 @@ try:
 except Exception as e:
     print("dota legs:", e)
 
+# 10/11 user ("club is better than int" -- measured: club HIT 55-23, club HIT PASSES 42-15 = 73.7%): CLUB soccer HIT passes-attempted
+# legs are a BET market. HIT is already club-only + under-only in _soccer.py; goalie-saves HITs (3-5) stay out. Leg p = the measured
+# club-HIT rate (0.70), not the model's own number; the line must still be live on PP at the same number.
+try:
+    _sd = datetime.datetime.now(CT).date()
+    for _day in (_sd, _sd + datetime.timedelta(days=1)):
+        _bf = "_soccer_board_%s.json" % _day.isoformat()
+        if not os.path.exists(_bf):
+            continue
+        for r in json.load(open(_bf, encoding="utf-8")):
+            if r.get("verdict") != "HIT" or r.get("stat") != "Passes Attempted" or not r.get("start"):
+                continue
+            if datetime.datetime.fromisoformat(r["start"]).astimezone(datetime.timezone.utc) < now:
+                continue
+            lv = live.get(("SOCCER", M.norm(r["player"]), M.norm(r["stat"])))
+            if not lv or float(lv["line"]) != float(r["line"]):
+                print("  soccer HIT not live at %s: %s %s" % (r["line"], r["player"], r["stat"])); continue
+            std.append(dict(sport="SOCCER", soccer_hit=True, player=r["player"], team=r.get("team"), opp=r.get("opp"), stat=r["stat"],
+                            line=r["line"], side=r["side"], p=0.70, start=r["start"],
+                            why="Club soccer HIT passes (measured 42-15, 73.7%%): %d of %d starts %s, avg %.1f" % (r.get("hits") or 0, r.get("n") or 0, r["side"], r.get("avg") or 0)))
+            print("  SOCCER HIT leg: %s %s %s %s" % (r["player"], r["side"], r["line"], r["stat"]))
+except Exception as e:
+    print("soccer legs:", e)
+
 # sharp check on the STANDARD leg: a Pinnacle/FanDuel price that disagrees with our side by 5+ pts drops it (Gauthier 10/9: 51%)
 PINS = {}
 for sp in ("NHL", "WNBA", "NBA", "NFL", "CFB"):
@@ -420,7 +444,7 @@ except Exception as e:
 # A slip is a 💰 BET only if every leg comes from a proven market (promo, NHL/WNBA direction filter, NFL BETA); otherwise 📝 PAPER --
 # paper slips are logged + graded every day so every league keeps building a record ("I want everything to pass even if we don't bet").
 FAM = lambda s: "ESPORTS" if s["sport"] in ("CS2", "VAL", "Dota2", "LoL") else s["sport"]
-money_ok = lambda s: bool(s.get("promo")) or bool(s.get("beta")) or (s["sport"] in ("NHL", "WNBA") and not s.get("paper"))
+money_ok = lambda s: bool(s.get("promo")) or bool(s.get("beta")) or bool(s.get("soccer_hit")) or (s["sport"] in ("NHL", "WNBA") and not s.get("paper"))
 CRAZY = lambda s: bool(s.get("promo")) or s["p"] >= 0.66
 by_fam = collections.defaultdict(list)
 for s in sorted(std, key=lambda s: -s["p"]):
