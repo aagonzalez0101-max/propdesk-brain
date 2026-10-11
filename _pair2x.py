@@ -152,7 +152,12 @@ try:
                 if any(v is not None for v in (rec, ry, ru, py)):
                     impl = (rec or 0) + 0.1 * ((ry or 0) + (ru or 0)) + 0.04 * (py or 0)
                     if (side == "over" and impl < l["line"] * 0.95) or (side == "under" and impl > l["line"] * 1.05):
-                        print("  dropped (FanDuel implied fantasy %.1f vs line %s): %s %s" % (impl, l["line"], l["player"], side)); continue
+                        print("  dropped (FanDuel implied fantasy %.1f vs line %s): %s %s" % (impl, l["line"], l["player"], side))
+                        with open("gate_drops.jsonl", "a", encoding="utf-8") as gf:      # graded nightly by _gate_grade.py (Hutchinson 10/11 would have been a winning drop)
+                            gf.write(json.dumps(dict(date=today, sport="NFL", player=l["player"], stat=l["stat"], line=l["line"], model_side=side,
+                                                     flip_side="under" if side == "over" else "over", reason="fanduel implied fantasy %.1f" % impl,
+                                                     start=l.get("start"), result=None), ensure_ascii=False) + chr(10))
+                        continue
             except Exception as e:
                 print("fd fantasy:", e)
         own = hit if side == "over" else 1 - hit
