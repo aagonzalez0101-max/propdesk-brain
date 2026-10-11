@@ -24,6 +24,8 @@ NHL_TEAM = {"ANA": "Anaheim", "BOS": "Boston", "BUF": "Buffalo", "CAR": "Carolin
 
 
 def cfg():
+    if __import__("os").environ.get("CARD_DRYRUN"):
+        return {}                                       # dry run: print, don't post
     try:
         return json.load(open("notify.json", encoding="utf-8"))
     except Exception:
@@ -110,9 +112,49 @@ def esports_games(leg):
     return G or None
 
 
+NFL_KEYS = {"pass yards": ("passing_yards",), "rush yards": ("rushing_yards",), "receiving yards": ("receiving_yards",),
+            "receptions": ("receptions",), "rush attempts": ("carries",), "pass attempts": ("attempts",), "pass completions": ("completions",),
+            "rush+rec yds": ("rushing_yards", "receiving_yards")}
+
+
+def nfl_games(leg):
+    keys = NFL_KEYS.get(leg["stat"].lower())
+    fant = leg["stat"].lower() == "fantasy score"
+    if not keys and not fant:
+        return None
+    db = sqlite3.connect("sports.db"); G = []
+    for season, d, opp, js in db.execute("select season,date,opp,stats from player_games where sport='NFL' and player=? and season in ('2025','2026') order by season, date",
+                                         (leg["player"],)):
+        s = json.loads(js); w = int(d[1:])
+        day = (datetime.date(2026 if season == "2026" else 2025, 9, 13 if season == "2026" else 7) + datetime.timedelta(days=7 * (w - 1))).isoformat()
+        G.append(dict(season=season, date=day, opp=opp, mins=float(s.get("targets") or s.get("carries") or s.get("attempts") or 0),
+                      v=_fantasy(s) if fant else sum(float(s.get(k) or 0) for k in keys)))
+    return G or None
+
+
+def _fantasy(s):
+    g = lambda k: float(s.get(k) or 0)                # PrizePicks NFL fantasy scoring (same as the backtest)
+    return (0.04 * g("passing_yards") + 4 * g("passing_tds") - g("interceptions") + 0.1 * (g("rushing_yards") + g("receiving_yards"))
+            + 6 * (g("rushing_tds") + g("receiving_tds")) + g("receptions"))
+
+
 def stats_for(leg):
     """Numbers behind the leg. None when the sport/stat has no history we can read."""
     sp, st = leg["sport"], leg["stat"].lower()
+    if sp == "NFL":
+        G = nfl_games(leg)
+        if not G:
+            return None
+        db = None
+        line, over = leg["line"], leg["side"] == "over"
+        hit = lambda X: sum((g["v"] > line) if over else (g["v"] < line) for g in X)
+        seas = [g for g in G if g["season"] == "2026"]; prev = [g for g in G if g["season"] == "2025"]
+        opp = (leg.get("opp") or "")[:3].upper(); vs = [g for g in G if (g["opp"] or "").upper().startswith(opp)] if opp else []
+        mean = lambda X: statistics.mean(g["v"] for g in X) if X else None
+        l10 = G[-10:]
+        return dict(l10=l10, l10_avg=mean(l10), l10_hit=hit(l10), l10_vals=[g["v"] for g in l10], seas_n=len(seas), seas_avg=mean(seas),
+                    seas_hit=hit(seas), prev_n=len(prev), prev_avg=mean(prev), prev_hit=hit(prev), vs_n=len(vs), vs_avg=mean(vs), vs_hit=hit(vs),
+                    mins=statistics.mean(g["mins"] for g in l10), last=G[-1]["date"])
     if sp.upper() in ("CS2", "VAL", "DOTA2", "DOTA 2", "DOTA"):
         G = esports_games(leg)
         if not G:
@@ -220,12 +262,14 @@ def why_text(leg, S):
         if es:
             P.append("⏱️ %.0f %s per series" % (S["mins"], "min" if sp.upper().startswith("DOTA") else "rounds"))
         else:
-            P.append("⏱️ %.1f %s a game" % (S["mins"], "min TOI" if sp == "NHL" else "min"))
+            P.append("⏱️ %.1f %s a game" % (S["mins"], "min TOI" if sp == "NHL" else "touches/targets" if sp == "NFL" else "min"))
         P.append("📅 Last played %s" % _day(S["last"]))
     else:
         P.append("_No game history for this market yet_")
     why = leg.get("why") or ""
     reasons = why.split(":", 1)[-1].split("|")[0].strip() if ":" in why else ""
+    if leg.get("beta"):
+        P.append("🧪 **NFL BETA**: measured on 1 week (61%, holdout 49%) -- small stake or paper until Week 6 grades")
     P.append("🤖 Model **%.0f%%** %s" % (100 * leg["p"], "HIGHER" if over else "LOWER"))
     if reasons:
         P.append("✅ %s: %s" % (why.split(":")[0], reasons))

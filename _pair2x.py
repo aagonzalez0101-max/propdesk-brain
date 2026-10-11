@@ -80,6 +80,66 @@ if os.path.exists("cs2_paper.jsonl"):
                         p=0.62 if coin else 0.68, why="CS2 rule: edge %.1f%%%s" % (100 * e, "" if coin else ", lopsided map (68% tier)"),
                         start=l["start"], img=l.get("img")))
 
+# NFL BETA (10/10, user: "make NFL work, I'm not taking another week without it"). Measured on 1,067 graded PP lines (Week 4-5 2026):
+# when a player's OWN 2026 games went the same way vs THIS line >= 75% of the time (2+ games), that side hit 61.3% (n=326) --
+# but the Week-5 holdout was 48.9% (n=47). Unproven -> carded as NFL BETA (tagged), graded every Monday, promoted only if Week 6 holds.
+try:
+    import sqlite3 as _sq, statistics as _st
+    _f = lambda s_, k: float(s_.get(k) or 0)
+    NFL_STAT = {"Pass Yards": lambda s_: _f(s_, "passing_yards"), "Rush Yards": lambda s_: _f(s_, "rushing_yards"),
+                "Receiving Yards": lambda s_: _f(s_, "receiving_yards"), "Receptions": lambda s_: _f(s_, "receptions"),
+                "Rush Attempts": lambda s_: _f(s_, "carries"), "Pass Attempts": lambda s_: _f(s_, "attempts"),
+                "Pass Completions": lambda s_: _f(s_, "completions"), "Rush+Rec Yds": lambda s_: _f(s_, "rushing_yards") + _f(s_, "receiving_yards"),
+                "Fantasy Score": lambda s_: 0.04 * _f(s_, "passing_yards") + 4 * _f(s_, "passing_tds") - _f(s_, "interceptions")
+                + 0.1 * (_f(s_, "rushing_yards") + _f(s_, "receiving_yards")) + 6 * (_f(s_, "rushing_tds") + _f(s_, "receiving_tds")) + _f(s_, "receptions")}
+    _db = _sq.connect("sports.db"); _NG = {}
+    for _pl, _js, _d in _db.execute("select player, stats, date from player_games where sport='NFL' and season='2026'"):
+        _NG.setdefault(M.norm(_pl), []).append((int(_d[1:]), json.loads(_js)))
+    n_nfl = 0
+    for (sp, pl, st), l in live.items():
+        if sp != "NFL" or l["stat"] not in NFL_STAT or pl in USED or l.get("kind") != "standard":
+            continue
+        if datetime.datetime.fromisoformat(l["start"]).astimezone(datetime.timezone.utc) < now:
+            continue
+        games = sorted(_NG.get(pl, []), key=lambda t: t[0])
+        if len(games) < 3 or l["line"] < 2.5:
+            continue                                                   # tiny lines (0.5 rec) make every "margin" look huge
+        if (games[-1][1].get("position") or "") in ("K", "P", ""):
+            continue                                                   # kickers: our stats have no field goals -> fake fantasy 0s
+        vals = [NFL_STAT[l["stat"]](g_) for _, g_ in games]
+        hit = sum(v > l["line"] for v in vals) / len(vals); avg = _st.mean(vals)
+        # strongest measured version only: EVERY 2026 game went that way (63.5%, n=285) and the average sits 15%+ off the line
+        if hit == 1.0 and avg >= l["line"] * 1.15:
+            side = "over"
+        elif hit == 0.0 and avg <= l["line"] * 0.85:
+            side = "under"
+        else:
+            continue
+        own = hit if side == "over" else 1 - hit
+        std.append(dict(sport="NFL", player=l["player"], team=l.get("team"), opp=l.get("opp"), stat=l["stat"], line=l["line"], side=side,
+                        p=0.61, why="NFL BETA own-rate: %d of %d games %s, avg %.1f (1 week measured: 61%%, holdout 49%%)"
+                        % (round(own * len(vals)), len(vals), side, avg), start=l["start"], img=l.get("img"), beta=True))
+        n_nfl += 1
+    # cap: the 8 NFL legs furthest from their line (a flood of thin legs is how off-book slips get built)
+    def gap(x):                                                        # margin in standard deviations of his own games
+        vals_ = [NFL_STAT[x["stat"]](g_) for _, g_ in _NG.get(M.norm(x["player"]), [])]
+        sd_ = max(_st.pstdev(vals_) if len(vals_) > 1 else 0, 0.25 * x["line"])
+        return abs(_st.mean(vals_) - x["line"]) / sd_
+    keepn = set(id(x) for x in sorted([x for x in std if x.get("beta")], key=gap, reverse=True)[:8])
+    std = [x for x in std if not x.get("beta") or id(x) in keepn]
+    print("NFL BETA legs: %d found, %d kept" % (n_nfl, len(keepn)))
+    # paper-log every kept NFL BETA leg (graded when nflverse posts the week) -- this is how the beta earns or loses its place
+    _seen = set()
+    if os.path.exists("nfl_beta_paper.jsonl"):
+        _seen = {(json.loads(x)["player"], json.loads(x)["stat"], json.loads(x)["start"]) for x in open("nfl_beta_paper.jsonl", encoding="utf-8")}
+    with open("nfl_beta_paper.jsonl", "a", encoding="utf-8") as nf:
+        for x in std:
+            if x.get("beta") and (x["player"], x["stat"], x["start"]) not in _seen:
+                nf.write(json.dumps(dict(logged=today, player=x["player"], team=x.get("team"), opp=x.get("opp"), stat=x["stat"], line=x["line"],
+                                         side=x["side"], start=x["start"], why=x["why"], result=None), ensure_ascii=False) + chr(10))
+except Exception as e:
+    print("NFL beta:", e)
+
 # 10/10 (sh1ro O31 vs MOUZ lost; MOUZ had held him under 4 of 5): the bet bar is value AND head-to-head AND form -- check them
 # BEFORE carding. Drop a leg when, toward the call, the last 5 hit under 50%%, or vs this opponent (3+ games) hit under 40%%.
 try:
@@ -91,10 +151,19 @@ try:
             l5 = S_["l10"][-5:]
             over_ = s_["side"] == "over"
             h5 = sum((g["v"] > s_["line"]) if over_ else (g["v"] < s_["line"]) for g in l5)
+            why_drop = None
             if len(l5) >= 5 and h5 < 3:
-                print("  dropped (form: %d of last 5 %s): %s %s %s" % (h5, s_["side"], s_["player"], s_["stat"], s_["line"])); continue
-            if S_["vs_n"] >= 3 and S_["vs_hit"] / S_["vs_n"] < 0.4:
-                print("  dropped (vs %s: %d of %d): %s %s" % (s_.get("opp"), S_["vs_hit"], S_["vs_n"], s_["player"], s_["side"])); continue
+                why_drop = "form %d of last 5" % h5
+            elif S_["vs_n"] >= 3 and S_["vs_hit"] / S_["vs_n"] < 0.4:
+                why_drop = "vs %s %d of %d" % (s_.get("opp"), S_["vs_hit"], S_["vs_n"])
+            if why_drop:
+                print("  dropped (%s): %s %s %s %s" % (why_drop, s_["player"], s_["stat"], s_["side"], s_["line"]))
+                # 10/10 user: log every dropped leg BOTH ways on paper -- model side vs the flip -- to measure who is right
+                with open("gate_drops.jsonl", "a", encoding="utf-8") as gf:
+                    gf.write(json.dumps(dict(date=today, sport=s_["sport"], player=s_["player"], stat=s_["stat"], line=s_["line"],
+                                             model_side=s_["side"], flip_side="under" if s_["side"] == "over" else "over", reason=why_drop,
+                                             start=s_.get("start"), result=None), ensure_ascii=False) + chr(10))
+                continue
         kept.append(s_)
     std = kept
 except Exception as e:
