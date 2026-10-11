@@ -7,7 +7,7 @@ best goblin you decide -- that's how we get the 2x's").
   value        = p_std x p_gob x payout - 1; bet only if the app's payout >= 1 / (p_std x p_gob) + ~5% cushion.
     python _pair2x.py
 """
-import json, datetime, os, subprocess, sys
+import json, datetime, os, subprocess, sys, collections
 import _props as P, _mismatch as M
 
 try:                                                    # 10/10 user: everything in Texas time (Central, DST-aware)
@@ -60,7 +60,7 @@ if os.path.exists("direction_paper.jsonl"):
 seen_cs = set()
 # 10/11: with 874 graded band legs the CS2 band hits 52.7% -- BELOW the 55% a 3-pick needs (the 56.8% was a smaller sample).
 # CS2 is PAPER: still projected, logged and graded by _cs2_live / _cs2_grade, but not carded for money unless CS2_LIVE=1.
-if os.path.exists("cs2_paper.jsonl") and os.environ.get("CS2_LIVE") == "1":
+if os.path.exists("cs2_paper.jsonl"):
     for x in open("cs2_paper.jsonl", encoding="utf-8"):
         r = json.loads(x)
         e = r.get("edge") or 0
@@ -79,7 +79,7 @@ if os.path.exists("cs2_paper.jsonl") and os.environ.get("CS2_LIVE") == "1":
         seen_cs.add(k)
         coin = 0.45 <= (r.get("map_winp") or 0.5) <= 0.55
         pc = __import__("_calib_es").cal("cs2", r.get("model_p"))   # 10/10: calibrated -- CS2 calls really hit ~56%, not 62-68%
-        std.append(dict(sport="CS2", player=r["player"], team=r.get("team"), opp=r.get("opp"), stat=stat, line=l["line"], side=side,
+        std.append(dict(sport="CS2", paper=os.environ.get("CS2_LIVE") != "1", player=r["player"], team=r.get("team"), opp=r.get("opp"), stat=stat, line=l["line"], side=side,
                         p=round(pc or 0.56, 3), why="CS2 rule: edge %.1f%%%s, model %.0f%% -> real ~%.0f%%" % (100 * e, "" if coin else ", lopsided map", 100 * (r.get("model_p") or 0), 100 * (pc or 0.56)),
                         start=l["start"], img=l.get("img")))
 
@@ -190,6 +190,24 @@ try:
     std = kept
 except Exception as e:
     print("form/H2H check:", e)
+
+# 10/11: Dota 2 legs join the ESPORTS paper pool (calibrated ~56%, paper until proven); today's/tomorrow's LEANs not started yet
+try:
+    import _calib_es as _CE
+    if os.path.exists("dota_paper.jsonl"):
+        _dseen = set()
+        for x in open("dota_paper.jsonl", encoding="utf-8"):
+            r = json.loads(x)
+            if r.get("result") or not r.get("start") or (r["player"], r["line"]) in _dseen:
+                continue
+            if datetime.datetime.fromisoformat(r["start"]).astimezone(datetime.timezone.utc) < now:
+                continue
+            _dseen.add((r["player"], r["line"]))
+            std.append(dict(sport="Dota2", paper=True, player=r["player"], team=r.get("team"), opp=r.get("opp"), stat="MAPS 1-2 Kills",
+                            line=r["line"], side=r["side"], p=round(_CE.cal("dota", r.get("p")) or 0.56, 3),
+                            why="Dota model %.0f%% -> real ~%.0f%% (paper)" % (100 * (r.get("p") or 0), 100 * (_CE.cal("dota", r.get("p")) or 0.56)), start=r["start"]))
+except Exception as e:
+    print("dota legs:", e)
 
 # sharp check on the STANDARD leg: a Pinnacle/FanDuel price that disagrees with our side by 5+ pts drops it (Gauthier 10/9: 51%)
 PINS = {}
@@ -379,35 +397,86 @@ try:
                         start=pm["start"], promo=True))
 except Exception as e:
     print("promo legs:", e)
-_rank = lambda s: (0 if s.get("promo") else 1 if s["sport"] in ("NHL", "WNBA", "NBA") else 2 if s.get("beta") else 3 if s["sport"] == "CS2" else 2, -s["p"])
-pool, seen_t = [], set()
-for s in sorted(std, key=_rank):
-    if s["team"] not in seen_t:
-        seen_t.add(s["team"]); pool.append(s)
-print("\n3-PICK POWER 6x (needs 55%%/leg; 1 leg per team across all slips) -- %d eligible legs" % len(pool))
-k = 0; slips_txt = []; slips = []
-while len(pool) >= 3:
-    a = pool.pop(0); grp = [a]
-    for x in list(pool):
-        if x["sport"] == "CS2" and any(g["sport"] == "CS2" for g in grp):
-            continue                                                   # max one thin CS2 leg per slip
+# 10/11 user: LEAGUE-BASED slips -- one slip per league (NHL, WNBA, NBA, NFL, CFB, ESPORTS = any esports mixed, MLB when back), built only
+# from that league's legs; leagues mix ONLY for crazy value (a promo leg, or calibrated p >= 0.66 = projection way past the line).
+# A slip is a 💰 BET only if every leg comes from a proven market (promo, NHL/WNBA direction filter, NFL BETA); otherwise 📝 PAPER --
+# paper slips are logged + graded every day so every league keeps building a record ("I want everything to pass even if we don't bet").
+FAM = lambda s: "ESPORTS" if s["sport"] in ("CS2", "VAL", "Dota2", "LoL") else s["sport"]
+money_ok = lambda s: bool(s.get("promo")) or bool(s.get("beta")) or (s["sport"] in ("NHL", "WNBA") and not s.get("paper"))
+CRAZY = lambda s: bool(s.get("promo")) or s["p"] >= 0.66
+by_fam = collections.defaultdict(list)
+for s in sorted(std, key=lambda s: -s["p"]):
+    by_fam[FAM(s)].append(s)
+used_team, used_leg = set(), set()
+
+
+def _build(cands, n):
+    grp = []
+    for x in cands:
+        if id(x) in used_leg or x["team"] in used_team or any(x["team"] == g["team"] for g in grp):
+            continue
         if x.get("promo") and any(g.get("promo") for g in grp):
-            continue                                                   # one promo per slip (PP limits promo stacking)
-        if all({x["team"], x.get("opp")} != {g["team"], g.get("opp")} for g in grp):
-            grp.append(x); pool.remove(x)
-        if len(grp) == 3:
+            continue                                                   # one promo per slip
+        if any({x["team"], x.get("opp")} == {g["team"], g.get("opp")} for g in grp):
+            continue                                                   # legs from different games
+        grp.append(x)
+        if len(grp) == n:
             break
-    if len(grp) < 3:
-        break
-    k += 1; ph = grp[0]["p"] * grp[1]["p"] * grp[2]["p"]
-    print("  SLIP %d   all three ~%.0f%%   value at 6x %+.0f%%" % (k, 100 * ph, 100 * (ph * 6 - 1)))
+    return grp if len(grp) == n else None
+
+
+k = 0; slips_txt = []; slips = []
+print("\nLEAGUE SLIPS (one per league; 3-pick 6x needs 55%/leg, 2-pick 3x needs 57.7%):")
+for fam in sorted(by_fam, key=lambda f: -max(s["p"] for s in by_fam[f])):
+    grp = _build(by_fam[fam], 3)
+    mult = 6.0
+    if grp is None:
+        g2 = _build(by_fam[fam], 2)
+        if g2 and min(g["p"] for g in g2) >= 0.60:                      # a 2-pick only when both legs clear 60% (2-pick b/e 57.7%)
+            grp, mult = g2, 3.0
+    if not grp:
+        continue
     for g in grp:
+        used_leg.add(id(g)); used_team.add(g["team"])
+    ph = 1.0
+    for g in grp:
+        ph *= g["p"]
+    k += 1
+    tag = "BET" if all(money_ok(g) for g in grp) else "PAPER"
+    slips.append((k, grp, ph, mult, tag, fam))
+# crazy-value mixer: leftover legs from different leagues, only promos / projections way past the line
+left = [s for s in sorted(std, key=lambda s: -s["p"]) if id(s) not in used_leg and CRAZY(s)]
+grp = _build(left, 3)
+if grp and len({FAM(g) for g in grp}) > 1:
+    for g in grp:
+        used_leg.add(id(g)); used_team.add(g["team"])
+    ph = grp[0]["p"] * grp[1]["p"] * grp[2]["p"]
+    k += 1
+    slips.append((k, grp, ph, 6.0, "BET" if all(money_ok(g) for g in grp) else "PAPER", "MIXED (crazy value)"))
+for k_, grp_, ph_, mult_, tag_, fam_ in slips:
+    print("  %s SLIP %d %-20s %d-pick %gx  all hit ~%.0f%%  value %+.0f%%" % ("💰" if tag_ == "BET" else "📝", k_, fam_, len(grp_), mult_, 100 * ph_, 100 * (ph_ * mult_ - 1)))
+    for g in grp_:
         print("    PP: %-22s %-5s %-18s %-5s %-5s  %.0f%%  (%s)" % (g["player"], g["team"] or "", g["stat"][:18], g["side"].upper(), g["line"], 100 * g["p"], g["why"][:50]))
-    slips.append((k, grp, ph))
-    slips_txt.append("**SLIP %d** · 3-pick 6x · all three ~%.0f%%\n" % (k, 100 * ph) + "\n".join(
-        "%s **%s** %s %s · %.0f%% · %s" % ("🔺 HIGHER" if g["side"] == "over" else "🔻 LOWER", g["player"], g["stat"], g["line"], 100 * g["p"],
-                                          datetime.datetime.fromisoformat(g["start"].replace("Z", "+00:00")).astimezone(CT).strftime("%a %I:%M %p"))
-        for g in grp))
+    slips_txt.append("**%s SLIP %d** · %s · %d-pick %gx · all ~%.0f%%" % (tag_, k_, fam_, len(grp_), mult_, 100 * ph_) + chr(10) + chr(10).join(
+        "%s **%s** %s %s · %.0f%%" % ("🔺 HIGHER" if g["side"] == "over" else "🔻 LOWER", g["player"], g["stat"], g["line"], 100 * g["p"]) for g in grp_))
+# every PAPER slip (and every BET slip) is logged for grading -- dedupe by legs
+try:
+    _ps_seen = set()
+    if os.path.exists("paper_slips.jsonl"):
+        for x in open("paper_slips.jsonl", encoding="utf-8"):
+            if x.strip():
+                _ps_seen.add(json.loads(x)["sig"])
+    with open("paper_slips.jsonl", "a", encoding="utf-8") as pf:
+        for k_, grp_, ph_, mult_, tag_, fam_ in slips:
+            sg = "|".join(sorted("%s/%s/%s/%s" % (g["player"], g["stat"], g["line"], g["side"]) for g in grp_))
+            if sg in _ps_seen:
+                continue
+            pf.write(json.dumps(dict(logged=datetime.datetime.now(CT).isoformat(timespec="minutes"), tag=tag_, league=fam_, mult=mult_, p=round(ph_, 4), sig=sg,
+                                     legs=[{kk: g.get(kk) for kk in ("sport", "player", "team", "opp", "stat", "line", "side", "p", "start")} for g in grp_],
+                                     result=None), ensure_ascii=False) + chr(10))
+except Exception as e:
+    print("paper log:", e)
+
 
 try:
     # 10/9: the card goes to Discord #card as rich cards (_cardpost.py): a header, then one message per slip with a card per leg
@@ -428,6 +497,8 @@ try:
                 rr = json.loads(x)
                 if rr.get("posted", "") >= cut:
                     posted.add(sig(rr["legs"]))
+    paper_slips = [t for t in slips if t[4] == "PAPER"]
+    slips = [t for t in slips if t[4] == "BET"]
     fresh = [t for t in slips if sig(t[1]) not in posted]
     # 10/10 user: "5 bets max" a day -- count today's real bets + slips already posted today; post only what fits, best value first
     _today = datetime.datetime.now(CT).date().isoformat()
@@ -446,8 +517,13 @@ try:
                  "**%d slip%s** below%s.\n\n**🔺 OVERS that qualify (%d)**\n%s\n\n**🔻 UNDERS that qualify (%d)**\n%s"
                  % (len(slips), "" if len(slips) == 1 else "s", (" · roll $%.2f · stake $%.2f each" % (rl, 0.05 * rl)) if rl else "",
                     len(_ov), side(_ov), len(_un), side(_un)))
-    for k_, grp_, ph_ in slips:
-        C.post_slip(k_, grp_, ph_, stake=0.05 * rl if rl else None)
+    for k_, grp_, ph_, mult_, tag_, fam_ in slips:
+        C.post_slip(k_, grp_, ph_, stake=0.05 * rl if rl else None, mult=mult_, be=0.55 if mult_ == 6.0 else 0.577)
+    _pp = [t for t in paper_slips if sig(t[1]) not in posted]
+    if _pp and not os.environ.get("NEW_ONLY"):
+        C.post_embed("📝 PAPER SLIPS · not bets -- tracked to build each league's record", chr(10).join(
+            "📝 **%s** · %d-pick %gx · all ~%.0f%% · %s" % (fam_, len(grp_), mult_, 100 * ph_, " / ".join("%s %s%g %s" % (g["player"], "O" if g["side"] == "over" else "U", g["line"], g["stat"].replace("MAPS 1-2 ", "")) for g in grp_))
+            for k_, grp_, ph_, mult_, tag_, fam_ in _pp), 0x7C7C7C)
     if not slips and not os.environ.get("NEW_ONLY"):
         C.post_embed("🧾 No new slip", "No 3 legs from different teams pass the filter on the live board yet -- wait for more lines, never force a slip.")
 except Exception as e:
