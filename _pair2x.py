@@ -58,7 +58,9 @@ if os.path.exists("direction_paper.jsonl"):
 # 62% / 68.2% when the map is not a coin flip); bigger edges are the WORST legs (top-of-card 22-50%) and are never carded.
 # The old "high-line under" shortcut (flat p=0.62, unmeasured) is gone -- it put 13-16% edge legs on the 10/10 card.
 seen_cs = set()
-if os.path.exists("cs2_paper.jsonl"):
+# 10/11: with 874 graded band legs the CS2 band hits 52.7% -- BELOW the 55% a 3-pick needs (the 56.8% was a smaller sample).
+# CS2 is PAPER: still projected, logged and graded by _cs2_live / _cs2_grade, but not carded for money unless CS2_LIVE=1.
+if os.path.exists("cs2_paper.jsonl") and os.environ.get("CS2_LIVE") == "1":
     for x in open("cs2_paper.jsonl", encoding="utf-8"):
         r = json.loads(x)
         e = r.get("edge") or 0
