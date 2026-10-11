@@ -11,7 +11,7 @@ IN:  every data file in this folder + small data folders + TODAY's raw PP/sharp 
 OUT: code (git), secrets (.env, notify.json), logs, the old raw archive, legacy data/, backtest-only caches (_euro, _nbl), and the
      big refetchable caches (_fotmob, _img_cache, _site_cache) -- the cloud keeps those in its own Actions cache.
 """
-import os, sys, json, tarfile, datetime, subprocess, urllib.request
+import os, sys, json, tarfile, datetime, subprocess, urllib.request, urllib.error
 
 REPO = "aagonzalez0101-max/propdesk-brain"
 TAG, ASSET = "data", "bundle.tar.gz"
@@ -165,7 +165,10 @@ def push(force=False, cloud=False, _retry=True):
     if a:
         api("https://api.github.com/repos/%s/releases/assets/%d" % (REPO, a["id"]), "DELETE")
     up = rel["upload_url"].split("{")[0] + "?name=" + ASSET
-    res = api(up, "POST", open(ASSET, "rb").read(), "application/gzip")
+    try:
+        res = api(up, "POST", open(ASSET, "rb").read(), "application/gzip")
+    except urllib.error.HTTPError as e:                          # 422 = the other side re-uploaded the asset in the same moment
+        print("upload rejected (%s)" % e.code); res = None
     os.remove(ASSET)
     if not res and _retry:                                       # the other side uploaded at the same moment -> merge again once
         print("upload collided -- retrying with a fresh merge")

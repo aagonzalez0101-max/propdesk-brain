@@ -427,8 +427,13 @@ def _build(cands, n):
 
 k = 0; slips_txt = []; slips = []
 print("\nLEAGUE SLIPS (one per league; 3-pick 6x needs 55%/leg, 2-pick 3x needs 57.7%):")
+_promos_wild = [s for s in sorted(std, key=lambda s: -s["p"]) if s.get("promo")]
 for fam in sorted(by_fam, key=lambda f: -max(s["p"] for s in by_fam[f])):
-    grp = _build(by_fam[fam], 3)
+    # a promo is crazy value by definition (~90%) -> it may anchor ANY league's slip (promo + that league's 2 best legs = the best bet we have)
+    _free = [p_ for p_ in _promos_wild if id(p_) not in used_leg and FAM(p_) != fam]
+    grp = _build(([_free[0]] if _free else []) + [x for x in by_fam[fam] if not x.get("promo")], 3) if _free else None
+    if grp is None or not any(g.get("promo") for g in grp):
+        grp = _build(by_fam[fam], 3)
     mult = 6.0
     if grp is None:
         g2 = _build(by_fam[fam], 2)
