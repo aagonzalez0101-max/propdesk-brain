@@ -9,7 +9,7 @@ Each minute it checks what is due (Central time) and has not run yet; after ever
     15:00  lines mid  picks + CS2/Dota projections + card    new lines for TONIGHT's games (the 9 PM card is tomorrow's)
     21:00  lines PM   python _daily.py lines      tomorrow's card the night before (lock early -- lines get pulled)
     hourly :05        snapshots + raised lines + card-leg line watch + Dota projections
-    :20 / :50         LINE-RELEASE SCAN (7 AM-11 PM): fresh picks + CS2 on the live board, posts ONLY new qualifying slips
+    :20 / :50         LINE-RELEASE SCAN (24/7, overnight too): fresh picks + CS2 on the live board, posts ONLY new qualifying slips
 Done-markers live in _brain_done.json (inside the bundle), so a restarted chain never repeats or skips a slot.
     python _brain.py [minutes=340]
 """
@@ -80,7 +80,7 @@ def main(minutes):
                 done[key] = now.isoformat(timespec="minutes")
                 done = {k: v for k, v in done.items() if k[:10] >= (now.date() - datetime.timedelta(days=3)).isoformat()}
                 json.dump(done, open(DONE_F, "w")); sync(); did = True
-        if not did and now.minute in (20, 50) and "%s %02d:%02d scan" % (day, now.hour, now.minute) not in done and (end - time.time()) > 900                 and 7 <= now.hour <= 23:
+        if not did and now.minute in (20, 50) and "%s %02d:%02d scan" % (day, now.hour, now.minute) not in done and (end - time.time()) > 900:   # 24/7 (user 10/10: "I should wake up to edge")
             # 10/10 user: "push it". LINE-RELEASE SCANNER every 30 min: early PP lines are the best ones (Hall/Talbot got pulled or raised
             # within hours). Re-score picks + CS2 on the fresh board; post ONLY slips that are new (NEW_ONLY), so Discord stays quiet otherwise.
             print("%s CT -- release scan" % now.strftime("%H:%M"), flush=True)

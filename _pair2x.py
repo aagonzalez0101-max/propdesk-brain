@@ -317,7 +317,8 @@ try:
     if os.environ.get("NEW_ONLY") and not fresh:
         raise SystemExit(0)                                            # scanner: nothing new -> no Discord noise
     slips = fresh
-    C.post_embed(("🆕 NEW LINES · %s" if os.environ.get("NEW_ONLY") else "🧾 TODAY'S CARD · %s") % datetime.datetime.now(CT).strftime("%a %m/%d %I:%M %p"),
+    _h = datetime.datetime.now(CT).hour
+    C.post_embed((("🌙 OVERNIGHT EDGE · %s" if (_h >= 23 or _h < 7) else "🆕 NEW LINES · %s") if os.environ.get("NEW_ONLY") else "🧾 TODAY'S CARD · %s") % datetime.datetime.now(CT).strftime("%a %m/%d %I:%M %p"),
                  "**%d slip%s** below%s.\n\n**🔺 OVERS that qualify (%d)**\n%s\n\n**🔻 UNDERS that qualify (%d)**\n%s"
                  % (len(slips), "" if len(slips) == 1 else "s", (" · roll $%.2f · stake $%.2f each" % (rl, 0.05 * rl)) if rl else "",
                     len(_ov), side(_ov), len(_un), side(_un)))
