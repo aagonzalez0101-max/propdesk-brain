@@ -80,6 +80,26 @@ if os.path.exists("cs2_paper.jsonl"):
                         p=0.62 if coin else 0.68, why="CS2 rule: edge %.1f%%%s" % (100 * e, "" if coin else ", lopsided map (68% tier)"),
                         start=l["start"], img=l.get("img")))
 
+# 10/10 (sh1ro O31 vs MOUZ lost; MOUZ had held him under 4 of 5): the bet bar is value AND head-to-head AND form -- check them
+# BEFORE carding. Drop a leg when, toward the call, the last 5 hit under 50%%, or vs this opponent (3+ games) hit under 40%%.
+try:
+    import _cardpost as _CP
+    kept = []
+    for s_ in std:
+        S_ = _CP.stats_for(s_)
+        if S_:
+            l5 = S_["l10"][-5:]
+            over_ = s_["side"] == "over"
+            h5 = sum((g["v"] > s_["line"]) if over_ else (g["v"] < s_["line"]) for g in l5)
+            if len(l5) >= 5 and h5 < 3:
+                print("  dropped (form: %d of last 5 %s): %s %s %s" % (h5, s_["side"], s_["player"], s_["stat"], s_["line"])); continue
+            if S_["vs_n"] >= 3 and S_["vs_hit"] / S_["vs_n"] < 0.4:
+                print("  dropped (vs %s: %d of %d): %s %s" % (s_.get("opp"), S_["vs_hit"], S_["vs_n"], s_["player"], s_["side"])); continue
+        kept.append(s_)
+    std = kept
+except Exception as e:
+    print("form/H2H check:", e)
+
 # sharp check on the STANDARD leg: a Pinnacle/FanDuel price that disagrees with our side by 5+ pts drops it (Gauthier 10/9: 51%)
 PINS = {}
 for sp in ("NHL", "WNBA", "NBA", "NFL", "CFB"):
