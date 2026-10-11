@@ -325,6 +325,36 @@ for s in sorted(std, key=lambda s: -s["p"]):
 if not n:
     print("  no standard leg from our filters is live on PP right now")
 
+# 🟢 GOBLIN PAIRS, sharp-gated (10/10 user: "double goblins right under the standard, 1.5-1.7x, free"). Measured: shallow goblins hit
+# NHL 67.9% / WNBA 70.4% -- a 1.5x pair needs 81.6% each, so blind pairs lose ~26%. Only post pairs where BOTH goblins are sharp-priced
+# high enough that p1*p2*1.5 >= 1.03 (his conservative payout; set GOB_MULT if his app shows more), different teams, one tier under std.
+try:
+    _GM = float(os.environ.get("GOB_MULT", 1.5))
+    _gp = sorted([g for g in gob if g["p"] >= (1.03 / _GM) ** 0.5 - 0.02], key=lambda g: -g["p"])
+    _pairs, _usedg = [], set()
+    for i, a_ in enumerate(_gp):
+        if a_["player"] in _usedg:
+            continue
+        b_ = next((x for x in _gp[i + 1:] if x["player"] not in _usedg and x["team"] != a_["team"]), None)
+        if b_ and a_["p"] * b_["p"] * _GM >= 1.03:
+            _pairs.append((a_, b_)); _usedg |= {a_["player"], b_["player"]}
+    _GF = "_gob_pairs_seen.json"
+    _gs = set(json.load(open(_GF))) if os.path.exists(_GF) else set()
+    _new = [(a_, b_) for a_, b_ in _pairs if "%s|%s" % (a_["player"], b_["player"]) not in _gs]
+    if _new:
+        import _cardpost as _C
+        NL = chr(10)
+        _C.post_embed("🟢 GOBLIN PAIRS · sharp-priced high enough to beat %.1fx" % _GM,
+                      "Both goblins priced by the sharp books above what a %.1fx pair needs (%.0f%% each). Check the payout on your screen -- if it shows LESS than %.1fx, skip it." % (_GM, 100 * (1 / _GM) ** 0.5, _GM)
+                      + NL + NL + NL.join("🟢 **%s** MORE %g %s (sharp %.0f%%)  +  **%s** MORE %g %s (sharp %.0f%%) · both hit **%.0f%%** · worth **%+.0f%%**"
+                                          % (a_["player"], a_["line"], a_["stat"], 100 * a_["p"], b_["player"], b_["line"], b_["stat"], 100 * b_["p"],
+                                             100 * a_["p"] * b_["p"], 100 * (a_["p"] * b_["p"] * _GM - 1)) for a_, b_ in _new[:5]), 0x1ED760)
+        _gs |= {"%s|%s" % (a_["player"], b_["player"]) for a_, b_ in _new}
+        json.dump(sorted(_gs)[-2000:], open(_GF, "w"))
+    print("goblin pairs: %d qualify (%d new)" % (len(_pairs), len(_new)))
+except Exception as e:
+    print("goblin pairs:", e)
+
 # 10/10 smartest-path ordering (user OK'd): PROMO-anchored 3-picks first (promo ~0.9 + 2 model legs = the best bet we have), then
 # direction legs, NFL BETA, and CS2 last (thin ~56%) with at most ONE CS2 leg per slip. 1 leg per team across all slips.
 try:
