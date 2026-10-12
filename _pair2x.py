@@ -493,7 +493,29 @@ except Exception as e:
 # A slip is a 💰 BET only if every leg comes from a proven market (promo, NHL/WNBA direction filter, NFL BETA); otherwise 📝 PAPER --
 # paper slips are logged + graded every day so every league keeps building a record ("I want everything to pass even if we don't bet").
 FAM = lambda s: "ESPORTS" if s["sport"] in ("CS2", "VAL", "Dota2", "LoL") else s["sport"]
-money_ok = lambda s: bool(s.get("promo")) or bool(s.get("beta")) or bool(s.get("soccer_hit")) or bool(s.get("nhl_under")) or (s["sport"] in ("NHL", "WNBA") and not s.get("paper"))
+# 10/12 user ("do it now"): NFL BETA legs are BET only once a full NFL week has graded at 60%+ (8+ legs); they switch back to PAPER on
+# their own if the running record falls under the 57.7% 2-pick break-even. Week 5 (10/11) was 9-2 on ESPN box scores, pending nflverse.
+def _beta_live():
+    try:
+        R = [json.loads(x) for x in open("nfl_beta_paper.jsonl", encoding="utf-8") if x.strip()]
+        wk = lambda d: (datetime.date.fromisoformat(d[:10]) - datetime.date(2026, 9, 9)).days // 7 + 1
+        W = collections.defaultdict(list)
+        for r in R:
+            if r.get("start"):
+                W[wk(r["start"])].append(r)
+        done = [w for w, rs in W.items() if all(r.get("result") for r in rs) and len([r for r in rs if r["result"] in ("W", "L")]) >= 8]
+        if not done:
+            return False
+        last = [r for r in W[max(done)] if r["result"] in ("W", "L")]
+        allg = [r for r in R if r.get("result") in ("W", "L")]
+        ok = sum(r["result"] == "W" for r in last) / len(last) >= 0.60 and sum(r["result"] == "W" for r in allg) / len(allg) >= 0.577
+        print("NFL BETA money switch: week %d %d/%d, running %d/%d -> %s" % (max(done), sum(r["result"] == "W" for r in last), len(last),
+              sum(r["result"] == "W" for r in allg), len(allg), "BET" if ok else "PAPER"))
+        return ok
+    except Exception as e:
+        print("beta switch:", e); return False
+NFL_BETA_LIVE = _beta_live()
+money_ok = lambda s: bool(s.get("promo")) or (bool(s.get("beta")) and NFL_BETA_LIVE) or bool(s.get("soccer_hit")) or bool(s.get("nhl_under")) or (s["sport"] in ("NHL", "WNBA") and not s.get("paper"))
 CRAZY = lambda s: bool(s.get("promo")) or s["p"] >= 0.66
 by_fam = collections.defaultdict(list)
 for s in sorted(std, key=lambda s: -s["p"]):
