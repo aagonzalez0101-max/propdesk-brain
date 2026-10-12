@@ -497,6 +497,8 @@ FAM = lambda s: "ESPORTS" if s["sport"] in ("CS2", "VAL", "Dota2", "LoL") else s
 # their own if the running record falls under the 57.7% 2-pick break-even. Week 5 (10/11) was 9-2 on ESPN box scores, pending nflverse.
 def _beta_live():
     try:
+        if os.path.exists("nfl_beta_status.json") and json.load(open("nfl_beta_status.json")).get("force"):
+            print("NFL BETA money switch: ON (user override, nfl_beta_status.json)"); return True
         R = [json.loads(x) for x in open("nfl_beta_paper.jsonl", encoding="utf-8") if x.strip()]
         wk = lambda d: (datetime.date.fromisoformat(d[:10]) - datetime.date(2026, 9, 9)).days // 7 + 1
         W = collections.defaultdict(list)
