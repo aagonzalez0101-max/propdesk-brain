@@ -26,7 +26,7 @@ def members():
     out = []
     for f in os.listdir("."):
         if os.path.isfile(f):
-            if f in SKIP_FILES or os.path.splitext(f)[1] in SKIP_EXT or ".bak" in f:
+            if f in SKIP_FILES or os.path.splitext(f)[1] in SKIP_EXT or ".bak" in f or f.endswith(".tar.gz"):
                 continue
             out.append(f)
         elif os.path.isdir(f) and f not in SKIP_DIRS:
@@ -58,6 +58,19 @@ def unpack(path):
             raise SystemExit("refusing: unsafe paths in bundle %s" % bad[:3])
         t.extractall(".", filter="data")
     print("unpacked", path)
+
+
+def ok_gz(path):
+    """10/12: a corrupt bundle (a laptop upload read a half-written file) broke every later sync -> verify before upload/after download."""
+    import gzip
+    try:
+        with gzip.open(path, "rb") as f:
+            while f.read(1 << 24):
+                pass
+        return True
+    except Exception as e:
+        print("bundle integrity check FAILED (%s): %s" % (path, e))
+        return False
 
 
 def token():
@@ -168,8 +181,13 @@ def push(force=False, cloud=False, _retry=True):
     changed = a and st.get("pulled_updated") and a["updated_at"] != st["pulled_updated"]
     if changed and not force:
         # someone else uploaded since our last sync -> merge instead of refusing or overwriting
-        download(a, "_remote.tar.gz")
-        with tarfile.open("_remote.tar.gz", "r:gz") as t:
+        rp = "_remote_%d.tar.gz" % os.getpid()
+        download(a, rp)
+        if not ok_gz(rp):
+            os.remove(rp); print("remote bundle is corrupt -- skipping the merge, uploading our good copy over it")
+            changed = False
+    if changed and not force:
+        with tarfile.open(rp, "r:gz") as t:
             for m in t.getmembers():
                 if m.name == "live_paper.jsonl":
                     remote = t.extractfile(m).read().decode("utf-8")
@@ -184,17 +202,20 @@ def push(force=False, cloud=False, _retry=True):
                         t.extract(m, ".", filter="data")
                 elif not cloud:                                     # laptop push: everything else = the cloud's newer copy
                     t.extract(m, ".", filter="data")
-        os.remove("_remote.tar.gz")
+        os.remove(rp)
         print("merged with the newer remote bundle (%s): bet ledger row-merged" % a["updated_at"])
-    pack(ASSET)
+    bp = "_bundle_%d.tar.gz" % os.getpid()          # never the shared name: a pull writing bundle.tar.gz corrupted an upload on 10/12
+    pack(bp)
+    if not ok_gz(bp):
+        os.remove(bp); raise SystemExit("our own pack is corrupt -- not uploading")
     if a:
         api("https://api.github.com/repos/%s/releases/assets/%d" % (REPO, a["id"]), "DELETE")
     up = rel["upload_url"].split("{")[0] + "?name=" + ASSET
     try:
-        res = api(up, "POST", open(ASSET, "rb").read(), "application/gzip")
+        res = api(up, "POST", open(bp, "rb").read(), "application/gzip")
     except urllib.error.HTTPError as e:                          # 422 = the other side re-uploaded the asset in the same moment
         print("upload rejected (%s)" % e.code); res = None
-    os.remove(ASSET)
+    os.remove(bp)
     if not res and _retry:                                       # the other side uploaded at the same moment -> merge again once
         print("upload collided -- retrying with a fresh merge")
         return push(force, cloud, _retry=False)
@@ -206,10 +227,13 @@ def pull():
     rel = release(); a = remote_asset(rel)
     if not a:
         raise SystemExit("no bundle in the release yet")
-    download(a, ASSET)
+    dp = "_pull_%d.tar.gz" % os.getpid()
+    download(a, dp)
+    if not ok_gz(dp):
+        os.remove(dp); raise SystemExit("remote bundle is corrupt -- kept every local file; push a good copy with: python _bundle.py push --force")
     # 10/11: a pull overwrote a paper slip logged locally minutes earlier -> keep local rows, merge them back in after unpacking
     keep = {f: open(f, encoding="utf-8").read() for f in ["live_paper.jsonl"] + list(MERGE_KEYS) if os.path.exists(f)}
-    unpack(ASSET); os.remove(ASSET)
+    unpack(dp); os.remove(dp)
     for f, local in keep.items():
         remote = open(f, encoding="utf-8").read() if os.path.exists(f) else ""
         open(f, "w", encoding="utf-8").write(merge_ledger(local, remote) if f == "live_paper.jsonl" else merge_rows(local, remote, MERGE_KEYS[f]))
