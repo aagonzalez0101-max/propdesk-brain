@@ -20,7 +20,7 @@ g = lambda u: json.loads(urllib.request.urlopen(urllib.request.Request(u, header
 CT = datetime.timezone(datetime.timedelta(hours=-5))
 CACHE = "_bball_logs"
 os.makedirs(CACHE, exist_ok=True)
-SEASONS = {"wnba": (2025, 2026), "nba": (2025, 2026)}   # ESPN NBA season 2026 = 2025-26
+SEASONS = {"wnba": (2025, 2026), "nba": (2025, 2026, 2027)}   # ESPN NBA season 2026 = 2025-26; 2027 = 2026-27 (preseason + the season opening 10/20)
 PP_LEAGUE = {"wnba": 3, "nba": 7}
 PIN = {"wnba": 578, "nba": 487}
 UD_SPORT = {"wnba": "WNBA", "nba": "NBA"}
@@ -72,6 +72,7 @@ def logs(league, aid):
         tp = [i for i, x in enumerate(n) if x.startswith("threepointfieldgoalsmade")]
         for s_ in d.get("seasonTypes", []):
             post = "post" in (s_.get("displayName") or "").lower()
+            pre = "pre" in (s_.get("displayName") or "").lower()          # 10/13: preseason games are flagged so regular-season models skip them
             for c in s_.get("categories", []):
                 for e in c.get("events", []):
                     s = e["stats"]; m = d["events"][e["eventId"]]
@@ -79,7 +80,7 @@ def logs(league, aid):
                         out.append(dict(date=m["gameDate"][:10], opp=m["opponent"]["abbreviation"], home=m.get("atVs") == "vs",
                                         min=float(s[n.index("minutes")]), pts=float(s[n.index("points")]),
                                         reb=float(s[n.index("totalrebounds")]), ast=float(s[n.index("assists")]),
-                                        tpm=float(s[tp[0]].split("-")[0]) if tp else 0.0, post=post, season=yr))
+                                        tpm=float(s[tp[0]].split("-")[0]) if tp else 0.0, post=post, pre=pre, season=yr))
                     except (ValueError, IndexError, KeyError):
                         continue
     out.sort(key=lambda r: r["date"])
