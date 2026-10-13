@@ -753,7 +753,9 @@ try:
     fresh = [t for t in slips if sig(t[1]) not in posted and not any((g["player"], (g.get("start") or "")[:10]) in posted_players for g in t[1])]
     # 10/10 user: "5 bets max" a day -- count today's real bets + slips already posted today; post only what fits, best value first
     _today = datetime.datetime.now(CT).date().isoformat()
-    _bets = sum(1 for x in open("live_paper.jsonl", encoding="utf-8") if x.strip() and json.loads(x).get("kind") == "LIVE" and json.loads(x).get("date") == _today)
+    # 10/13 user: an early-locked slip (NFL 3-pick placed Tue for Sunday) counts on its GAME day (game_date), not the day it was placed
+    _bets = sum(1 for x in open("live_paper.jsonl", encoding="utf-8") if x.strip() and json.loads(x).get("kind") == "LIVE"
+                and (json.loads(x).get("game_date") or json.loads(x).get("date")) == _today)
     _cards = sum(1 for x in open("_slips_posted.jsonl", encoding="utf-8") if x.strip() and json.loads(x).get("posted", "")[:10] == _today)         if os.path.exists("_slips_posted.jsonl") else 0
     room = max(0, 5 - max(_bets, _cards))
     fresh = sorted(fresh, key=lambda t: -t[2])[:room]
