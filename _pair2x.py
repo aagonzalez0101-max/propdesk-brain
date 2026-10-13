@@ -294,7 +294,7 @@ try:
         tk = r["call"] == "TAKE UNDER"
         std.append(dict(sport="NHL", nhl_under=True, player=lv["player"], team=lv.get("team") or r.get("team"), opp=lv.get("opp") or r.get("opp"),
                         stat=lv["stat"], line=lv["line"], side="under", p=0.70 if tk else 0.62, start=lv["start"],
-                        why="NHL screen %s (measured %s): avg %s, h2h %s" % (r["call"], "29-11, 72.5%%" if tk else "58-34, 63%%", r.get("adj_mean") or r.get("avg"), r.get("h2h"))))
+                        why="NHL screen %s (measured %s): avg %s, h2h %s" % (r["call"], "29-11, 72.5%" if tk else "58-34, 63%", r.get("adj_mean") or r.get("avg"), r.get("h2h"))))
         _have.add(pn)
         print("  NHL UNDER leg: %s %s U%s (%s, called at %s)" % (lv["player"], lv["stat"], lv["line"], r["call"], r["line"]))
 except Exception as e:
@@ -377,6 +377,13 @@ keep = []
 for s_ in std:
     st = M.STAT.get(M.norm(s_["stat"])); R = PINS.get((s_["sport"], M.norm(s_["player"]), st)) if st else None
     po = M.p_over_at(R, s_["line"], st) if R else None
+    if po is None and s_["sport"] == "NHL" and M.norm(s_["stat"]) == "points" and float(s_["line"]) == 0.5:
+        # 10/13 Kent Johnson U0.5 pts carded at 62%: Pinnacle posts no NHL points, but goals + assists imply it -> P(0 pts) ~ (1-pG)(1-pA)
+        _pl = M.norm(s_["player"])
+        _gR, _aR = PINS.get(("NHL", _pl, "goals")), PINS.get(("NHL", _pl, "assists"))
+        _pg = next((pr for ln, pr in (_gR or []) if ln == 0.5), None); _pa = next((pr for ln, pr in (_aR or []) if ln == 0.5), None)
+        if _pg is not None and _pa is not None:
+            po = 1 - (1 - _pg) * (1 - _pa)
     if po is not None:
         sharp = po if s_["side"] == "over" else 1 - po
         s_["sharp"] = sharp
