@@ -98,6 +98,23 @@ try:
     _db = _sq.connect("sports.db"); _NG = {}
     for _pl, _js, _d in _db.execute("select player, stats, date from player_games where sport='NFL' and season='2026'"):
         _NG.setdefault(M.norm(_pl), []).append((int(_d[1:]), json.loads(_js)))
+    # 10/13: sports.db lagged a week (Juwan Johnson read 4-of-4 over; his 16-yd week 5 was missing) -> the nflverse weekly file
+    # (refreshed by _nfl_beta_grade.py every morning) wins for any week it has
+    try:
+        import csv as _csv
+        if os.path.exists("nfl_2026_weekly.csv"):
+            _have = {(k, w) for k, v in _NG.items() for w, _ in v}
+            for _r in _csv.DictReader(open("nfl_2026_weekly.csv", encoding="utf-8")):
+                if _r.get("season_type", "REG") != "REG":
+                    continue
+                _k, _w = M.norm(_r["player_display_name"]), int(_r["week"])
+                _r = dict(_r, interceptions=_r.get("passing_interceptions"))
+                if (_k, _w) in _have:
+                    _NG[_k] = [(w, (_r if w == _w else g)) for w, g in _NG[_k]]
+                else:
+                    _NG.setdefault(_k, []).append((_w, _r))
+    except Exception as e:
+        print("nfl weekly merge:", e)
     # 10/10: Shipley U9.5 (Barkley OUT, Bigsby IR -> Shipley leads the backfield) and Coleman U18.5 (WR Douglas OUT) were role-change traps.
     # Injury context first: no NFL UNDER when a same-team, same-position teammate is Out / Doubtful / IR this week.
     _OUTPOS = set()
