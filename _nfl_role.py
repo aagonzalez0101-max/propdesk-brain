@@ -79,6 +79,7 @@ def project(player, stat, week, absent=None, opp=None, use_d=False, rows=None):
         tot = sum(active.values())
         if freed > 0 and tot > 0 and n in active:
             share += freed * active[n] / tot
+    share = min(share, 1.0)                          # 10/13: Daniels read 110% (an IR backup QB's share was added on top)
     vol = st.mean(vol_by_wk.values())
     eff = 1.0
     if ekey:
