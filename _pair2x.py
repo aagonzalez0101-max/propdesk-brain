@@ -359,7 +359,8 @@ try:
             _day0 = datetime.datetime.fromisoformat(lv["start"]).astimezone(CT).date().isoformat()
             if _PS.late_preseason(lv.get("team") or r.get("team"), _day0):
                 _a0 = _BBq.roster("nba").get(M.norm(lv["player"]))
-                _reg = [g_ for g_ in (_BBq.logs("nba", _a0[0]) if _a0 else []) if not g_.get("pre") and g_.get("season") == 2026]
+                _all0 = [g_ for g_ in (_BBq.logs("nba", _a0[0]) if _a0 else []) if not g_.get("pre")]
+                _reg = [g_ for g_ in _all0 if g_.get("season") == 2026] or [g_ for g_ in _all0 if g_.get("season") == max((x["season"] for x in _all0), default=0)]   # Haliburton missed 2025-26
                 if _reg and sum(g_["min"] for g_ in _reg) / len(_reg) >= 25:
                     print("  preseason under blocked (late-preseason dress rehearsal, starter): %s %s" % (lv["player"], lv["stat"])); continue
         except Exception as e:
