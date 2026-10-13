@@ -352,6 +352,18 @@ try:
         if datetime.datetime.fromisoformat(lv["start"]).astimezone(datetime.timezone.utc) < now:
             continue
         tk = r["call"] == "TAKE UNDER"
+        # 10/13 user: "the last preseason is fucked" -- starters stretch out in a team's last 2 preseason games (Curry 2025: 27 + 30 min after
+        # 13-16 all preseason). Block the under for a STARTER (25+ min/g last season) there; bench players lose minutes in a dress rehearsal.
+        try:
+            import _nba_presched as _PS, _bball as _BBq
+            _day0 = datetime.datetime.fromisoformat(lv["start"]).astimezone(CT).date().isoformat()
+            if _PS.late_preseason(lv.get("team") or r.get("team"), _day0):
+                _a0 = _BBq.roster("nba").get(M.norm(lv["player"]))
+                _reg = [g_ for g_ in (_BBq.logs("nba", _a0[0]) if _a0 else []) if not g_.get("pre") and g_.get("season") == 2026]
+                if _reg and sum(g_["min"] for g_ in _reg) / len(_reg) >= 25:
+                    print("  preseason under blocked (late-preseason dress rehearsal, starter): %s %s" % (lv["player"], lv["stat"])); continue
+        except Exception as e:
+            print("presched:", e)
         _pj = r.get("adj_mean") or r.get("proj")
         if not tk and (_pj is None or _pj > 0.85 * float(lv["line"])):
             continue                     # 10/13: both preseason-under misses were LEANs within 15% of the line (Wemby 2.6 vs 3, McDaniels 19.9 vs 21.5)
