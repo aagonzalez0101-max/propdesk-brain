@@ -677,7 +677,7 @@ try:
     rl = C.roll()
     # 10/10 cloud line-release scanner: never post the same slip twice; NEW_ONLY runs (every 30 min) stay silent unless a NEW slip qualifies
     sig = lambda grp_: "|".join(sorted("%s/%s/%s/%s" % (g["player"], g["stat"], g["line"], g["side"]) for g in grp_))
-    posted = set()
+    posted, posted_players = set(), set()
     if os.path.exists("_slips_posted.jsonl"):
         cut = (datetime.datetime.now(CT) - datetime.timedelta(days=2)).isoformat()
         for x in open("_slips_posted.jsonl", encoding="utf-8"):
@@ -685,9 +685,12 @@ try:
                 rr = json.loads(x)
                 if rr.get("posted", "") >= cut:
                     posted.add(sig(rr["legs"]))
+                    # 10/13: Pionk landed on 3 posted slips in one morning (each scan reshuffled his partner) -> one posted slip per
+                    # player per game: a player already on a posted slip for that game is never posted again in a new combo
+                    posted_players |= {(g["player"], (g.get("start") or "")[:10]) for g in rr["legs"]}
     paper_slips = [t for t in slips if t[4] == "PAPER"]
     slips = [t for t in slips if t[4] == "BET"]
-    fresh = [t for t in slips if sig(t[1]) not in posted]
+    fresh = [t for t in slips if sig(t[1]) not in posted and not any((g["player"], (g.get("start") or "")[:10]) in posted_players for g in t[1])]
     # 10/10 user: "5 bets max" a day -- count today's real bets + slips already posted today; post only what fits, best value first
     _today = datetime.datetime.now(CT).date().isoformat()
     _bets = sum(1 for x in open("live_paper.jsonl", encoding="utf-8") if x.strip() and json.loads(x).get("kind") == "LIVE" and json.loads(x).get("date") == _today)
