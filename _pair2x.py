@@ -363,6 +363,65 @@ try:
 except Exception as e:
     print("nba preseason unders:", e)
 
+# 10/13 user ("do what you said ... RB, WR, TE, QB"): NFL AGREEMENT rule. Backtest weeks 4-5, 825 archived PP lines: the raw average alone
+# 54%, the ROLE+VOLUME model (+ half-shrunk defense) alone 54%, but when BOTH agree and both are 10%+ off the line: 183-127 (59%),
+# 15%+: 60%, 20%+: 62%. PAPER until 40 forward legs at 58%+, then BET by itself (nfl_agree_paper.jsonl, graded nightly).
+def _agree_switch():
+    try:
+        g = [json.loads(x) for x in open("nfl_agree_paper.jsonl", encoding="utf-8") if x.strip()] if os.path.exists("nfl_agree_paper.jsonl") else []
+        g = [r for r in g if r.get("result") in ("W", "L")]
+        w = sum(r["result"] == "W" for r in g)
+        ok = len(g) >= 40 and w / len(g) >= 0.58
+        print("NFL AGREE forward: %d-%d -> %s" % (w, len(g) - w, "BET" if ok else "PAPER")); return ok
+    except Exception as e:
+        print("agree switch:", e); return False
+NFL_AGREE_LIVE = _agree_switch()
+try:
+    import _nfl_role as _NR
+    _inj = set()
+    try:
+        import requests as _rq2
+        for _t in _rq2.get("https://site.api.espn.com/apis/site/v2/sports/football/nfl/injuries", timeout=30).json().get("injuries", []):
+            for _i in _t.get("injuries", []):
+                if (_i.get("status") or "") in ("Out", "Doubtful", "Injured Reserve"):
+                    _inj.add((_i.get("athlete") or {}).get("displayName"))
+    except Exception as e:
+        print("agree injuries:", e)
+    _have3 = {M.norm(s_["player"]) for s_ in std}
+    _ag_seen = set()
+    if os.path.exists("nfl_agree_paper.jsonl"):
+        _ag_seen = {(json.loads(x)["player"], json.loads(x)["stat"], json.loads(x)["line"]) for x in open("nfl_agree_paper.jsonl", encoding="utf-8") if x.strip()}
+    _FX = {"WSH": "WAS", "JAC": "JAX", "LAR": "LA"}
+    _n_ag = 0
+    for (sp, pl, st), l in live.items():
+        if sp != "NFL" or l.get("kind") != "standard" or l["stat"] not in _NR.STATS or l["line"] < 2.5 or pl in _have3:
+            continue
+        if datetime.datetime.fromisoformat(l["start"]).astimezone(datetime.timezone.utc) < now:
+            continue
+        _wk = 1 + (datetime.datetime.fromisoformat(l["start"]).astimezone(CT).date() - datetime.date(2026, 9, 8)).days // 7
+        _opp = _FX.get(l.get("opp"), l.get("opp"))
+        _rw = _NR.raw_avg(l["player"], l["stat"], _wk)
+        _rd = _NR.project(l["player"], l["stat"], _wk, absent=_inj, opp=_opp, use_d=True)
+        if _rw is None or not _rd:
+            continue
+        g0, g1 = (_rw - l["line"]) / l["line"], (_rd["proj"] - l["line"]) / l["line"]
+        if g0 * g1 <= 0 or min(abs(g0), abs(g1)) < 0.15:
+            continue
+        side = "over" if g0 > 0 else "under"
+        _p = 0.62 if min(abs(g0), abs(g1)) >= 0.20 else 0.60
+        std.append(dict(sport="NFL", nfl_agree=True, paper=not NFL_AGREE_LIVE, player=l["player"], team=l.get("team"), opp=l.get("opp"), stat=l["stat"],
+                        line=l["line"], side=side, p=_p, start=l["start"],
+                        why="NFL AGREE: own avg %.1f + role model %.1f (share %.0f%% of team volume) both %s %s (backtest 60%%)" % (_rw, _rd["proj"], 100 * _rd["share"], side, l["line"])))
+        _have3.add(pl); _n_ag += 1
+        if (l["player"], l["stat"], l["line"]) not in _ag_seen:
+            with open("nfl_agree_paper.jsonl", "a", encoding="utf-8") as _af:
+                _af.write(json.dumps(dict(logged=today, week=_wk, player=l["player"], team=l.get("team"), opp=l.get("opp"), stat=l["stat"], line=l["line"], side=side,
+                                          raw=round(_rw, 1), role=round(_rd["proj"], 1), share=round(_rd["share"], 3), start=l["start"], result=None), ensure_ascii=False) + chr(10))
+            _ag_seen.add((l["player"], l["stat"], l["line"]))
+    print("NFL AGREE legs: %d" % _n_ag)
+except Exception as e:
+    print("nfl agree:", e)
+
 # sharp check on the STANDARD leg: a Pinnacle/FanDuel price that disagrees with our side by 5+ pts drops it (Gauthier 10/9: 51%)
 PINS = {}
 for sp in ("NHL", "WNBA", "NBA", "NFL", "CFB"):
@@ -587,7 +646,7 @@ def _beta_live():
     except Exception as e:
         print("beta switch:", e); return False
 NFL_BETA_LIVE = _beta_live()
-money_ok = lambda s: bool(s.get("promo")) or (bool(s.get("beta")) and NFL_BETA_LIVE) or bool(s.get("soccer_hit")) or bool(s.get("nhl_under")) or (bool(s.get("nba_pre_under")) and NBAP_LIVE) or (s["sport"] in ("NHL", "WNBA") and not s.get("paper"))
+money_ok = lambda s: bool(s.get("promo")) or (bool(s.get("beta")) and NFL_BETA_LIVE) or bool(s.get("soccer_hit")) or bool(s.get("nhl_under")) or (bool(s.get("nba_pre_under")) and NBAP_LIVE) or (bool(s.get("nfl_agree")) and NFL_AGREE_LIVE) or (s["sport"] in ("NHL", "WNBA") and not s.get("paper"))
 CRAZY = lambda s: bool(s.get("promo")) or s["p"] >= 0.66
 by_fam = collections.defaultdict(list)
 for s in sorted(std, key=lambda s: -s["p"]):
