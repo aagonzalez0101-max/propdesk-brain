@@ -428,11 +428,14 @@ except Exception as e:
 def _nbarole_switch():
     try:
         g = [json.loads(x) for x in open("nba_role_paper.jsonl", encoding="utf-8") if x.strip()] if os.path.exists("nba_role_paper.jsonl") else []
-        g = [r for r in g if r.get("result") in ("W", "L")]
-        w = sum(r["result"] == "W" for r in g); ok = len(g) >= 30 and w / len(g) >= 0.60
-        print("NBA ROLE UNDERS forward: %d-%d -> %s" % (w, len(g) - w, "BET" if ok else "PAPER")); return ok
+        out = {}
+        for sd in ("under", "over"):                          # 10/13 user: "nba overs ab to hit after preseason" -> overs get their own record + switch
+            gg = [r for r in g if r.get("result") in ("W", "L") and r.get("side", "under") == sd]
+            w = sum(r["result"] == "W" for r in gg); out[sd] = len(gg) >= 30 and w / len(gg) >= 0.60
+            print("NBA ROLE %sS forward: %d-%d -> %s" % (sd.upper(), w, len(gg) - w, "BET" if out[sd] else "PAPER"))
+        return out
     except Exception as e:
-        print("nba role switch:", e); return False
+        print("nba role switch:", e); return {"under": False, "over": False}
 NBA_ROLE_LIVE = _nbarole_switch()
 try:
     _nba_live = [l for (sp, pl, st), l in live.items() if sp == "NBA" and l.get("kind") == "standard"]
@@ -454,18 +457,22 @@ try:
             if not m_:
                 continue
             raw_, role_, pmin_ = m_
-            if raw_ > 0.90 * l["line"] or role_ > 0.90 * l["line"]:
+            if raw_ <= 0.90 * l["line"] and role_ <= 0.90 * l["line"]:
+                _sd = "under"
+            elif raw_ >= 1.10 * l["line"] and role_ >= 1.10 * l["line"]:
+                _sd = "over"                                  # paper-tracked; WNBA backtest overs 37% -> earns money only on its own forward record
+            else:
                 continue
-            std.append(dict(sport="NBA", nba_role_under=True, paper=not NBA_ROLE_LIVE, player=l["player"], team=l.get("team"), opp=l.get("opp"), stat=l["stat"],
-                            line=l["line"], side="under", p=0.65, start=l["start"],
-                            why="NBA ROLE UNDER: own avg %.1f + minutes model %.1f (%.0f min) both 10%%+ under %s (WNBA backtest 71%%)" % (raw_, role_, pmin_, l["line"])))
+            std.append(dict(sport="NBA", nba_role_under=(_sd == "under"), nba_role_over=(_sd == "over"), paper=not NBA_ROLE_LIVE[_sd], player=l["player"], team=l.get("team"),
+                            opp=l.get("opp"), stat=l["stat"], line=l["line"], side=_sd, p=0.65 if _sd == "under" else 0.55, start=l["start"],
+                            why="NBA ROLE %s: own avg %.1f + minutes model %.1f (%.0f min) both 10%%+ %s %s" % (_sd.upper(), raw_, role_, pmin_, _sd, l["line"])))
             _have4.add(M.norm(l["player"])); _n_nr += 1
             if (l["player"], l["stat"], _day) not in _seen_nr:
                 with open("nba_role_paper.jsonl", "a", encoding="utf-8") as _nf:
-                    _nf.write(json.dumps(dict(logged=today, day=_day, player=l["player"], team=l.get("team"), opp=l.get("opp"), stat=l["stat"], line=l["line"],
+                    _nf.write(json.dumps(dict(logged=today, day=_day, side=_sd, player=l["player"], team=l.get("team"), opp=l.get("opp"), stat=l["stat"], line=l["line"],
                                               raw=round(raw_, 1), role=round(role_, 1), pmin=round(pmin_, 1), start=l["start"], result=None), ensure_ascii=False) + chr(10))
                 _seen_nr.add((l["player"], l["stat"], _day))
-        print("NBA ROLE UNDER legs: %d" % _n_nr)
+        print("NBA ROLE legs (unders + overs): %d" % _n_nr)
 except Exception as e:
     print("nba role unders:", e)
 
@@ -693,7 +700,7 @@ def _beta_live():
     except Exception as e:
         print("beta switch:", e); return False
 NFL_BETA_LIVE = _beta_live()
-money_ok = lambda s: bool(s.get("promo")) or (bool(s.get("beta")) and NFL_BETA_LIVE) or bool(s.get("soccer_hit")) or bool(s.get("nhl_under")) or (bool(s.get("nba_pre_under")) and NBAP_LIVE) or (bool(s.get("nfl_agree")) and NFL_AGREE_LIVE) or (bool(s.get("nba_role_under")) and NBA_ROLE_LIVE) or (s["sport"] in ("NHL", "WNBA") and not s.get("paper"))
+money_ok = lambda s: bool(s.get("promo")) or (bool(s.get("beta")) and NFL_BETA_LIVE) or bool(s.get("soccer_hit")) or bool(s.get("nhl_under")) or (bool(s.get("nba_pre_under")) and NBAP_LIVE) or (bool(s.get("nfl_agree")) and NFL_AGREE_LIVE) or (bool(s.get("nba_role_under")) and NBA_ROLE_LIVE["under"]) or (bool(s.get("nba_role_over")) and NBA_ROLE_LIVE["over"]) or (s["sport"] in ("NHL", "WNBA") and not s.get("paper"))
 CRAZY = lambda s: bool(s.get("promo")) or s["p"] >= 0.66
 by_fam = collections.defaultdict(list)
 for s in sorted(std, key=lambda s: -s["p"]):

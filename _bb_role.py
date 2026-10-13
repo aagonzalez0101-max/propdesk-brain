@@ -154,10 +154,12 @@ def grade():
         if a is None:
             continue
         r["actual"] = a
-        r["result"] = "PUSH" if a == r["line"] else ("W" if a < r["line"] else "L")
+        r["result"] = "PUSH" if a == r["line"] else ("W" if (a < r["line"]) == (r.get("side", "under") == "under") else "L")
     open(F, "w", encoding="utf-8").write("".join(json.dumps(r, ensure_ascii=False) + "\n" for r in rows))
     g = [r for r in rows if r.get("result") in ("W", "L")]
-    print("NBA ROLE UNDERS paper: %d-%d (%d open)" % (sum(r["result"] == "W" for r in g), sum(r["result"] == "L" for r in g), sum(1 for r in rows if not r.get("result"))))
+    for sd in ("under", "over"):
+        gg = [r for r in g if r.get("side", "under") == sd]
+        print("NBA ROLE %sS paper: %d-%d" % (sd.upper(), sum(r["result"] == "W" for r in gg), sum(r["result"] == "L" for r in gg)))
 
 
 if __name__ == "__main__" and sys.argv[1:2] == ["grade"]:
