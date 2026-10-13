@@ -74,9 +74,14 @@ def grade():
                         v = next((ls.get("value") for ls in c.get("linescores") or [] if ls.get("period") == r["round"] and ls.get("value")), None)
             elif r["sport"] in ("MLB", "WNBA", "NBA"):
                 v = _db_actual(r)                     # box scores from sports.db (run `python _db.py update` first)
+                if v is None and r["sport"] == "NBA":
+                    v = _espn_nba(r)                  # 10/13: preseason games never reach sports.db -> 354 NBA calls sat ungraded
         except Exception:
             continue
         if v is None:
+            # 10/13: a scratched NHL skater has no game log -> the call sat open forever; 3+ days later with no log = VOID (PP voids DNPs)
+            if r["sport"] in ("NHL", "NBA") and (datetime.date.today() - datetime.date.fromisoformat(r["date"])).days >= 3:
+                r["result"] = "VOID"; n += 1
             continue
         r["actual"] = v
         over = v > r["line"]
@@ -87,6 +92,49 @@ def grade():
         for r in rows:
             f.write(json.dumps(r, ensure_ascii=False) + "\n")
     print("graded %d" % n)
+
+
+_NBA_BOX = {}
+
+
+def _espn_nba(r):
+    """NBA box score from ESPN (regular season or preseason) for the call date or the next day."""
+    import urllib.request, re
+    norm = lambda x: re.sub(r"[^a-z0-9]", "", (x or "").lower())
+    k = re.sub(r"[^a-z0-9]", "", r["stat"].lower())
+    parts = _WN.get(k)
+    if not parts:
+        return None
+    d0 = datetime.date.fromisoformat(r["date"])
+    for day in (d0, d0 + datetime.timedelta(days=1)):
+        ds = day.strftime("%Y%m%d")
+        if ds not in _NBA_BOX:
+            box = {}
+            for stype in (1, 2):
+                try:
+                    g = lambda u: json.loads(urllib.request.urlopen(urllib.request.Request(u, headers={"User-Agent": "Mozilla/5.0"}), timeout=30).read())
+                    for e in g("https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard?dates=%s&seasontype=%d" % (ds, stype)).get("events", []):
+                        if not e["status"]["type"].get("completed"):
+                            continue
+                        sm = g("https://site.api.espn.com/apis/site/v2/sports/basketball/nba/summary?event=" + e["id"])
+                        for tm in sm.get("boxscore", {}).get("players", []):
+                            for st in tm.get("statistics", []):
+                                lab = st.get("labels") or []
+                                for a in st.get("athletes", []):
+                                    if a.get("stats"):
+                                        v = dict(zip(lab, a["stats"]))
+                                        try:
+                                            box[norm(a["athlete"]["displayName"])] = dict(pts=float(v["PTS"]), reb=float(v["REB"]), ast=float(v["AST"]),
+                                                                                         tpm=float(str(v.get("3PT", "0-0")).split("-")[0]))
+                                        except Exception:
+                                            pass
+                except Exception:
+                    pass
+            _NBA_BOX[ds] = box
+        x = _NBA_BOX[ds].get(norm(r["player"]))
+        if x:
+            return sum(x[p] for p in parts)
+    return None
 
 
 _DBC = None

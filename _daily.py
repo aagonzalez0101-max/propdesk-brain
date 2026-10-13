@@ -100,6 +100,7 @@ def grade(log):
         ("Valorant: grade the full priced board", ["_val_grade.py", "val_priced_all.jsonl", "15"], 1500),
         ("Dota 2: pull new pro matches (OpenDota)", ["_dota_pull.py", "200"], 1500),
         ("Dota 2: grade paper legs from the pulled maps", ["_dota_grade.py"], 300),
+        ("RAISED lines: grade the over at the raised number (NFL/CFB)", ["_raised_grade.py"], 300),
         # 10/10: CS2/VAL history had stopped at 9/18 and 9/25 (never in the loop) -> the card's last-10 was weeks old
         ("CS2: pull new maps (bo3.gg, newest first, resumable)", ["_cs2_pull.py", "4"], 1500),
         ("Valorant: pull new maps (vlr.gg, newest first, resumable)", ["_val_pull.py", "3"], 1500),
