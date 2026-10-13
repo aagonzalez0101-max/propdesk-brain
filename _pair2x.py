@@ -554,6 +554,11 @@ for fam in sorted(by_fam, key=lambda f: -max(s["p"] for s in by_fam[f])):
         g2 = _build(by_fam[fam], 2)
         if g2 and min(g["p"] for g in g2) >= 0.60:                      # a 2-pick only when both legs clear 60% (2-pick b/e 57.7%)
             grp, mult = g2, 3.0
+        elif g2:                                                         # 10/13: under the bar -> still a PAPER 2-pick so it gets graded
+            for g in g2:
+                used_leg.add(id(g)); used_team.add(g["team"])
+            k += 1; slips.append((k, g2, g2[0]["p"] * g2[1]["p"], 3.0, "PAPER", fam + " (under the 60% bar)"))
+            continue
     if not grp:
         continue
     # 10/11 real record: PP 2-leg 7-9 (+$22.10) vs 3-leg 0-11 (-$17.90) -> BET slips are 2-picks (best two legs, promo first);
@@ -579,6 +584,56 @@ if grp and len({FAM(g) for g in grp}) > 1:
     ph = grp[0]["p"] * grp[1]["p"] * grp[2]["p"]
     k += 1
     slips.append((k, grp, ph, 6.0, "BET" if all(money_ok(g) for g in grp) else "PAPER", "MIXED (crazy value)"))
+# 10/13 user ("0 paper bets to track yesterday was crazy"): paper is the record-builder, so EVERY day logs paper slips. After the BET/crazy
+# slips: a wider PAPER pool (today's/tomorrow's NHL screen calls on live PP standard lines, soccer HIT/LEAN legs on live PP lines) plus every
+# leftover card leg -> the best 2-pick per league, tagged PAPER, never money. Leg p = the model's number shrunk halfway to 50% (it runs hot).
+_pp_pool = []
+try:
+    _dset = {today, (datetime.date.fromisoformat(today) + datetime.timedelta(days=1)).isoformat()}
+    _seenp = {(M.norm(s["player"]), M.norm(s["stat"])) for s in std}
+    for x in open("calls_log.jsonl", encoding="utf-8"):
+        r = json.loads(x)
+        if r.get("sport") != "NHL" or r.get("date") not in _dset or r.get("call") not in ("TAKE OVER", "TAKE UNDER", "LEAN OVER", "LEAN UNDER") or not r.get("start"):
+            continue
+        k_ = (M.norm(r["player"]), M.norm(r["stat"])); lv = live.get(("NHL",) + k_)
+        if k_ in _seenp or not lv or float(lv["line"]) != float(r["line"]):
+            continue
+        if datetime.datetime.fromisoformat(r["start"].replace("Z", "+00:00")).astimezone(datetime.timezone.utc) < now:
+            continue
+        up = r["call"].endswith("OVER"); pm = r.get("p_role") if r.get("p_role") is not None else 0.55
+        pm = pm if up else 1 - pm
+        _seenp.add(k_)
+        _pp_pool.append(dict(sport="NHL", paper=True, player=lv["player"], team=lv.get("team"), opp=lv.get("opp"), stat=lv["stat"], line=lv["line"],
+                             side="over" if up else "under", p=round(0.5 + (pm - 0.5) / 2, 3), start=lv["start"], why="NHL screen %s (paper pool)" % r["call"]))
+    for _day in _dset:
+        _bf = "_soccer_board_%s.json" % _day
+        if not os.path.exists(_bf):
+            continue
+        for r in json.load(open(_bf, encoding="utf-8")):
+            if r.get("verdict") not in ("HIT", "LEAN") or not r.get("start"):
+                continue
+            k_ = (M.norm(r["player"]), M.norm(r["stat"])); lv = live.get(("SOCCER",) + k_)
+            if k_ in _seenp or not lv or float(lv["line"]) != float(r["line"]):
+                continue
+            if datetime.datetime.fromisoformat(r["start"]).astimezone(datetime.timezone.utc) < now:
+                continue
+            _seenp.add(k_)
+            _pp_pool.append(dict(sport="SOCCER", paper=True, player=r["player"], team=r.get("team"), opp=r.get("opp"), stat=r["stat"], line=r["line"],
+                                 side=r["side"], p=round(0.5 + ((r.get("p") or 0.55) - 0.5) / 2, 3), start=r["start"], why="Soccer %s (paper pool)" % r["verdict"]))
+except Exception as e:
+    print("paper pool:", e)
+_pfam = collections.defaultdict(list)
+for s in sorted([s for s in std if id(s) not in used_leg] + _pp_pool, key=lambda s: -s["p"]):
+    _pfam[FAM(s)].append(s)
+for fam in sorted(_pfam):
+    g2 = _build(_pfam[fam], 2)
+    if not g2:
+        continue
+    for g in g2:
+        used_leg.add(id(g)); used_team.add(g["team"])
+    k += 1
+    slips.append((k, g2, g2[0]["p"] * g2[1]["p"], 3.0, "PAPER", fam + " (paper pool)"))
+print("paper pool: %d extra legs -> %d paper slips" % (len(_pp_pool), sum(1 for s_ in slips if s_[5].endswith("(paper pool)"))))
 for k_, grp_, ph_, mult_, tag_, fam_ in slips:
     print("  %s SLIP %d %-20s %d-pick %gx  all hit ~%.0f%%  value %+.0f%%" % ("💰" if tag_ == "BET" else "📝", k_, fam_, len(grp_), mult_, 100 * ph_, 100 * (ph_ * mult_ - 1)))
     for g in grp_:
