@@ -160,6 +160,13 @@ MERGE_KEYS = {
     "paper_slips.jsonl": lambda r: (r.get("sig"), (r.get("logged") or "")[:10]),
     "gate_drops.jsonl": lambda r: (r.get("date"), r.get("sport"), r.get("player"), r.get("stat"), r.get("line"), r.get("model_side")),
     "nfl_beta_paper.jsonl": lambda r: (r.get("date") or r.get("logged"), r.get("player"), r.get("stat"), r.get("line"), r.get("side")),
+    # 10/13: the cloud's older calls_log overwrote 445 locally graded NBA/NHL rows -> every graded ledger merges row by row
+    "calls_log.jsonl": lambda r: (r.get("sport"), r.get("date"), r.get("player"), r.get("stat"), r.get("line"), r.get("call"), r.get("venue"), r.get("logged")),
+    "raised_paper.jsonl": lambda r: r.get("proj_id"),
+    "dota_paper.jsonl": lambda r: (r.get("date"), r.get("player"), r.get("stat"), r.get("line"), r.get("side")),
+    "nfl_odd_paper.jsonl": lambda r: (r.get("date"), r.get("player"), r.get("stat"), r.get("line"), r.get("side")),
+    "direction_paper.jsonl": lambda r: (r.get("date"), r.get("sport"), r.get("player"), r.get("stat"), r.get("line"), r.get("side")),
+    "soccer_paper.jsonl": lambda r: (r.get("date"), r.get("player"), r.get("stat"), r.get("line"), r.get("side")),
 }
 
 
