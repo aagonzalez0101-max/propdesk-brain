@@ -17,7 +17,7 @@ except Exception:
     CT = datetime.timezone(datetime.timedelta(hours=-5))
 now = datetime.datetime.now(datetime.timezone.utc)
 today = datetime.datetime.now(CT).date().isoformat()
-LG = {"NHL": 8, "WNBA": 3, "NBA": 7, "NFL": 9, "CFB": 15, "CS2": 265, "SOCCER": 82}
+LG = {"NHL": 8, "WNBA": 3, "NBA": 7, "NFL": 9, "CFB": 15, "CS2": 265, "SOCCER": 82, "NBAP": 237}
 
 # live PP standard board
 live = {}
@@ -317,6 +317,49 @@ try:
 except Exception as e:
     print("nhl unders:", e)
 
+# 10/13 user ("yes on the nba preseason"): NBA PRESEASON UNDERS. Graded model calls: TAKE UNDER 16-0, LEAN UNDER 4-2 (overs 101-151) --
+# starters sit the 2nd half. A preseason UNDER call counts only when PrizePicks' preseason board (league 237) has the same player+stat at
+# the same or HIGHER line. PAPER until the forward record (calls from 10/13 on) has 2+ graded days, 10+ legs, 65%+ -> then BET by itself.
+def _nbap_live_switch():
+    try:
+        W_ = collections.defaultdict(lambda: [0, 0])
+        for x in open("calls_log.jsonl", encoding="utf-8"):
+            r = json.loads(x)
+            if r.get("sport") == "NBA" and r.get("date", "") >= "2026-10-13" and r.get("call") in ("TAKE UNDER", "LEAN UNDER") and r.get("result") in ("W", "L"):
+                W_[r["date"]][0] += r["result"] == "W"; W_[r["date"]][1] += 1
+        w, n = sum(v[0] for v in W_.values()), sum(v[1] for v in W_.values())
+        ok = len(W_) >= 2 and n >= 10 and w / n >= 0.65
+        print("NBA preseason unders forward: %d-%d over %d days -> %s" % (w, n - w, len(W_), "BET" if ok else "PAPER"))
+        return ok
+    except Exception as e:
+        print("nbap switch:", e); return False
+NBAP_LIVE = _nbap_live_switch()
+try:
+    _have2 = {M.norm(s_["player"]) for s_ in std}
+    _dd = {today, (datetime.date.fromisoformat(today) + datetime.timedelta(days=1)).isoformat()}
+    _nb = {}
+    for x in open("calls_log.jsonl", encoding="utf-8"):
+        r = json.loads(x)
+        if r.get("sport") != "NBA" or r.get("date") not in _dd or r.get("call") not in ("TAKE UNDER", "LEAN UNDER") or not r.get("start"):
+            continue
+        k_ = (M.norm(r["player"]), M.norm(r["stat"]))
+        if k_ not in _nb or r["call"] == "TAKE UNDER":
+            _nb[k_] = r
+    for (pn, sn), r in _nb.items():
+        lv = live.get(("NBAP", pn, sn))
+        if pn in _have2 or not lv or float(lv["line"]) < float(r["line"]):
+            continue
+        if datetime.datetime.fromisoformat(lv["start"]).astimezone(datetime.timezone.utc) < now:
+            continue
+        tk = r["call"] == "TAKE UNDER"
+        std.append(dict(sport="NBAP", nba_pre_under=True, paper=not NBAP_LIVE, player=lv["player"], team=lv.get("team") or r.get("team"), opp=lv.get("opp") or r.get("opp"),
+                        stat=lv["stat"], line=lv["line"], side="under", p=0.72 if tk else 0.62, start=lv["start"],
+                        why="NBA preseason %s (graded unders 20-2): proj %s vs line %s" % (r["call"], r.get("adj_mean") or r.get("proj"), lv["line"])))
+        _have2.add(pn)
+        print("  NBA PRESEASON UNDER leg: %s %s U%s (%s, called at %s)" % (lv["player"], lv["stat"], lv["line"], r["call"], r["line"]))
+except Exception as e:
+    print("nba preseason unders:", e)
+
 # sharp check on the STANDARD leg: a Pinnacle/FanDuel price that disagrees with our side by 5+ pts drops it (Gauthier 10/9: 51%)
 PINS = {}
 for sp in ("NHL", "WNBA", "NBA", "NFL", "CFB"):
@@ -541,7 +584,7 @@ def _beta_live():
     except Exception as e:
         print("beta switch:", e); return False
 NFL_BETA_LIVE = _beta_live()
-money_ok = lambda s: bool(s.get("promo")) or (bool(s.get("beta")) and NFL_BETA_LIVE) or bool(s.get("soccer_hit")) or bool(s.get("nhl_under")) or (s["sport"] in ("NHL", "WNBA") and not s.get("paper"))
+money_ok = lambda s: bool(s.get("promo")) or (bool(s.get("beta")) and NFL_BETA_LIVE) or bool(s.get("soccer_hit")) or bool(s.get("nhl_under")) or (bool(s.get("nba_pre_under")) and NBAP_LIVE) or (s["sport"] in ("NHL", "WNBA") and not s.get("paper"))
 CRAZY = lambda s: bool(s.get("promo")) or s["p"] >= 0.66
 by_fam = collections.defaultdict(list)
 for s in sorted(std, key=lambda s: -s["p"]):
