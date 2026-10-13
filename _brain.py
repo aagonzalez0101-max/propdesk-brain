@@ -28,7 +28,7 @@ DAILY = [("grade", (6, 30), [["_daily.py", "grade"]], 7200, 4200),
          ("lines_10", (10, 0), [["_dir_search.py", "score"], ["_cs2_live.py", "card"], ["_dota_proj.py"], ["_pair2x.py"]], 3000, 900),
          ("lines_mid", (15, 0), [["_dir_search.py", "score"], ["_cs2_live.py", "card"], ["_dota_proj.py"], ["_pair2x.py"]], 3600, 1200),
          ("lines_pm", (21, 0), [["_daily.py", "lines"]], 5400, 2400)]
-HOURLY = [["_snap_lines.py"], ["_snap_sharps.py"], ["_raised.py"], ["_linewatch.py"], ["_dota_proj.py"]]
+HOURLY = [["_snap_lines.py"], ["_promos.py"], ["_snap_sharps.py"], ["_raised.py"], ["_linewatch.py"], ["_dota_proj.py"]]   # 10/13: promos were laptop-only
 
 
 def load():

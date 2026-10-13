@@ -82,6 +82,15 @@ def main(show_all=False):
             for p in new:
                 f.write("%s  %s %s %s %s -> %s (%s)\n" % (datetime.datetime.now(CT).strftime("%m-%d %H:%M"), p["league"], p["player"], p["stat"],
                                                           p["line"], p["promo_line"], p["kind"]))
+        try:                                                    # 10/13: promo alerts in Discord too (cloud has no desktop toast)
+            import _cardpost as _C
+            NL = chr(10)
+            _C.post_embed("🎁 NEW PROMO%s on PrizePicks" % ("S" if len(new) > 1 else ""), NL.join(
+                "**%s** %s %s: ~~%s~~ → **%s** (%s) · %s" % (p["player"], p["league"], p["stat"], p["line"], p["promo_line"], p["kind"],
+                datetime.datetime.fromisoformat(p["start"]).astimezone(CT).strftime("%a %I:%M %p TX") if p.get("start") else "")
+                for p in new) + NL + NL + "Tacos can be traps -- check his own games vs the PROMO line before locking.", 0xFF4FD8)
+        except Exception as e:
+            print("discord promo post:", e)
         try:
             import _notify
             for p in new:
