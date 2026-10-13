@@ -352,6 +352,9 @@ try:
         if datetime.datetime.fromisoformat(lv["start"]).astimezone(datetime.timezone.utc) < now:
             continue
         tk = r["call"] == "TAKE UNDER"
+        _pj = r.get("adj_mean") or r.get("proj")
+        if not tk and (_pj is None or _pj > 0.85 * float(lv["line"])):
+            continue                     # 10/13: both preseason-under misses were LEANs within 15% of the line (Wemby 2.6 vs 3, McDaniels 19.9 vs 21.5)
         std.append(dict(sport="NBAP", nba_pre_under=True, paper=not NBAP_LIVE, player=lv["player"], team=lv.get("team") or r.get("team"), opp=lv.get("opp") or r.get("opp"),
                         stat=lv["stat"], line=lv["line"], side="under", p=0.72 if tk else 0.62, start=lv["start"],
                         why="NBA preseason %s (graded unders 20-2): proj %s vs line %s" % (r["call"], r.get("adj_mean") or r.get("proj"), lv["line"])))
