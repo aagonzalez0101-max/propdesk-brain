@@ -376,6 +376,59 @@ try:
 except Exception as e:
     print("nba preseason unders:", e)
 
+# 10/13 user ("add that now to the model"): NHL ROLE GUARD. Podkolzin U2.5 SOG was carded off last season (15.4 min, 1.7 SOG) while
+# 2026-27 he plays 19.2 min with 3.4 SOG. Every NHL leg: this season's TOI vs last season's -- minutes UP 15%+ blocks an UNDER, minutes
+# DOWN 15%+ blocks an OVER; and with 3+ games this season, a leg whose side lost in 60%+ of them is blocked. Drops -> gate_drops.jsonl.
+_NHL_ROLE = {}
+def _nhl_role(player):
+    if player in _NHL_ROLE:
+        return _NHL_ROLE[player]
+    out = None
+    try:
+        import requests as _rq3
+        _s = _rq3.get("https://search.d3.nhle.com/api/v1/search/player", params=dict(culture="en-us", limit=5, q=player), timeout=20).json()
+        _s = next((x for x in _s if M.norm(x.get("name")) == M.norm(player)), _s[0] if _s else None)
+        if _s:
+            _logs = {}
+            for _sea in ("20262027", "20252026"):
+                _logs[_sea] = _rq3.get("https://api-web.nhle.com/v1/player/%s/game-log/%s/2" % (_s["playerId"], _sea), timeout=20).json().get("gameLog", [])
+            _t = lambda L: sum(int(r["toi"].split(":")[0]) + int(r["toi"].split(":")[1]) / 60 for r in L) / len(L) if L else None
+            out = dict(cur=_logs["20262027"], toi_now=_t(_logs["20262027"]), toi_last=_t(_logs["20252026"]))
+    except Exception as e:
+        print("nhl role lookup:", player, e)
+    _NHL_ROLE[player] = out
+    return out
+_NHLK = {"shotsongoal": "shots", "points": "points", "assists": "assists", "goals": "goals", "hits": "hits", "blockedshots": "blockedShots"}
+_kept_nr = []
+for s_ in std:
+    if s_["sport"] != "NHL" or s_.get("promo"):
+        _kept_nr.append(s_); continue
+    R_ = _nhl_role(s_["player"])
+    why_ = None
+    if R_ and R_["toi_now"] and R_["toi_last"]:
+        ratio = R_["toi_now"] / R_["toi_last"]
+        if s_["side"] == "under" and ratio >= 1.15:
+            why_ = "role up: TOI %.1f -> %.1f" % (R_["toi_last"], R_["toi_now"])
+        elif s_["side"] == "over" and ratio <= 0.85:
+            why_ = "role down: TOI %.1f -> %.1f" % (R_["toi_last"], R_["toi_now"])
+    k_ = _NHLK.get(M.norm(s_["stat"]))
+    if not why_ and R_ and k_ and len(R_["cur"]) >= 3:
+        v_ = [r.get(k_) or 0 for r in R_["cur"]]
+        lost = sum((x > s_["line"]) if s_["side"] == "under" else (x < s_["line"]) for x in v_)
+        if lost / len(v_) >= 0.60:
+            why_ = "this season %d of %d games went the other way" % (lost, len(v_))
+    if why_:
+        print("  dropped (NHL role guard, %s): %s %s %s %s" % (why_, s_["player"], s_["stat"], s_["side"], s_["line"]))
+        try:
+            with open("gate_drops.jsonl", "a", encoding="utf-8") as gf:
+                gf.write(json.dumps(dict(date=today, sport="NHL", player=s_["player"], stat=s_["stat"], line=s_["line"], model_side=s_["side"],
+                                         flip_side="over" if s_["side"] == "under" else "under", reason="role guard: " + why_, start=s_.get("start"), result=None), ensure_ascii=False) + chr(10))
+        except Exception:
+            pass
+        continue
+    _kept_nr.append(s_)
+std = _kept_nr
+
 # 10/13 user ("do what you said ... RB, WR, TE, QB"): NFL AGREEMENT rule. Backtest weeks 4-5, 825 archived PP lines: the raw average alone
 # 54%, the ROLE+VOLUME model (+ half-shrunk defense) alone 54%, but when BOTH agree and both are 10%+ off the line: 183-127 (59%),
 # 15%+: 60%, 20%+: 62%. PAPER until 40 forward legs at 58%+, then BET by itself (nfl_agree_paper.jsonl, graded nightly).
