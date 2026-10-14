@@ -405,6 +405,7 @@ try:
         _reg = [g_ for g_ in _LX if not g_.get("pre")]
         _last = max((g_["season"] for g_ in _reg), default=0); _regl = [g_ for g_ in _reg if g_["season"] == _last]
         _mpg = sum(g_["min"] for g_ in _regl) / len(_regl) if _regl else 0
+        _mpg = max(_mpg, sum(_mins) / len(_mins) * (25 / 24))     # 10/14: rookies (Caleb Wilson 29-32 min) have no last season -> preseason 24+ min = starter
         _dayx = _stx.astimezone(CT).date().isoformat()
         if _mpg >= 25 and _PSx.late_preseason(l.get("team"), _dayx):
             print("  preseason box under blocked (starter, late preseason): %s %s" % (l["player"], l["stat"])); continue
