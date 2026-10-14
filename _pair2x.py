@@ -822,7 +822,24 @@ def _beta_live():
     except Exception as e:
         print("beta switch:", e); return False
 NFL_BETA_LIVE = _beta_live()
-money_ok = lambda s: bool(s.get("promo")) or (bool(s.get("beta")) and NFL_BETA_LIVE) or bool(s.get("soccer_hit")) or bool(s.get("nhl_under")) or (bool(s.get("nba_pre_under")) and NBAP_LIVE) or (bool(s.get("nfl_agree")) and NFL_AGREE_LIVE) or (bool(s.get("nba_role_under")) and NBA_ROLE_LIVE["under"]) or (bool(s.get("nba_role_over")) and NBA_ROLE_LIVE["over"]) or (s["sport"] in ("NHL", "WNBA") and not s.get("paper"))
+# 10/14 user ("make shit bettable asap and fix as we go"): PROBATION tier -- a rule with a positive backtest but no forward proof yet bets at
+# HALF stake (2.5% of the roll) from day one: NFL AGREE (60% backtest), NBA preseason unders (TAKE 21-2), NBA ROLE UNDERS (WNBA 71%).
+# Full stake once its own switch flips; a probation rule under break-even after 20 graded legs goes back to paper (_probation_ok).
+def _probation_ok(tag):
+    try:
+        F = {"nfl_agree": "nfl_agree_paper.jsonl", "nba_role_under": "nba_role_paper.jsonl"}.get(tag)
+        if not F or not os.path.exists(F):
+            return True
+        g = [json.loads(x) for x in open(F, encoding="utf-8") if x.strip()]
+        g = [r for r in g if r.get("result") in ("W", "L") and r.get("side", "under") in ("under", "over") and (tag != "nba_role_under" or r.get("side", "under") == "under")]
+        return len(g) < 20 or sum(r["result"] == "W" for r in g) / len(g) >= 0.577
+    except Exception:
+        return True
+_PROB = {t: _probation_ok(t) for t in ("nfl_agree", "nba_role_under", "nba_pre_under")}
+print("probation rules live: %s" % {k: ("HALF-STAKE BET" if v else "back to PAPER") for k, v in _PROB.items()})
+probation = lambda s: any(s.get(t) and _PROB[t] for t in _PROB) and not (
+    (s.get("nfl_agree") and NFL_AGREE_LIVE) or (s.get("nba_role_under") and NBA_ROLE_LIVE["under"]) or (s.get("nba_pre_under") and NBAP_LIVE))
+money_ok = lambda s: probation(s) or bool(s.get("promo")) or (bool(s.get("beta")) and NFL_BETA_LIVE) or bool(s.get("soccer_hit")) or bool(s.get("nhl_under")) or (bool(s.get("nba_pre_under")) and NBAP_LIVE) or (bool(s.get("nfl_agree")) and NFL_AGREE_LIVE) or (bool(s.get("nba_role_under")) and NBA_ROLE_LIVE["under"]) or (bool(s.get("nba_role_over")) and NBA_ROLE_LIVE["over"]) or (s["sport"] in ("NHL", "WNBA") and not s.get("paper"))
 CRAZY = lambda s: bool(s.get("promo")) or s["p"] >= 0.66
 by_fam = collections.defaultdict(list)
 for s in sorted(std, key=lambda s: -s["p"]):
@@ -1009,7 +1026,10 @@ try:
                  % (len(slips), "" if len(slips) == 1 else "s", (" · roll $%.2f · stake $%.2f each" % (rl, 0.05 * rl)) if rl else "",
                     len(_ov), side(_ov), len(_un), side(_un)))
     for k_, grp_, ph_, mult_, tag_, fam_ in slips:
-        C.post_slip(k_, grp_, ph_, stake=0.05 * rl if rl else None, mult=mult_, be=0.55 if mult_ == 6.0 else 0.577)
+        _half = any(probation(g) for g in grp_)                     # 10/14: any probation leg -> half stake, marked on the card
+        for g in grp_:
+            g["probation"] = bool(probation(g))
+        C.post_slip(k_, grp_, ph_, stake=(0.025 if _half else 0.05) * rl if rl else None, mult=mult_, be=0.55 if mult_ == 6.0 else 0.577)
     _pp = [t for t in paper_slips if sig(t[1]) not in posted]
     if _pp and not os.environ.get("NEW_ONLY"):
         C.post_embed("📝 PAPER SLIPS · not bets -- tracked to build each league's record", chr(10).join(

@@ -331,7 +331,8 @@ def post_slip(k, grp, ph, stake=None, mult=6.0, be=0.55):
     bad = [g["player"] for g, S in zip(grp, SS) if S and len(S["l10"]) >= 5 and S["l10_hit"] / len(S["l10"]) < 0.5
            and (not S["prev_n"] or S["prev_hit"] / S["prev_n"] < 0.5)]
     verdict = ("⚠️ SWAP %s FIRST · form and last season both disagree" % " & ".join(bad)) if bad else               "✅ TAKE IT" if value >= 0.15 and weakest >= 0.58 else "🟡 LEAN · small edge" if value > 0 else "⛔ PASS"
-    head = {"title": "🧾 SLIP %d · %d-pick · %gx" % (k, len(grp), mult), "color": 0x1DB954,
+    _prob = any(g.get("probation") for g in grp)                 # 10/14: probation rules bet at half stake until they prove forward
+    head = {"title": ("🟡 PROBATION · half stake · " if _prob else "") + "🧾 SLIP %d · %d-pick · %gx" % (k, len(grp), mult), "color": 0xF5C518 if _prob else 0x1DB954,
             "description": chr(10).join([
                 "## %s" % verdict,
                 "🎯 All %d hit **%.0f%%** · worth **%+.0f%%**" % (len(grp), 100 * ph, 100 * value),
