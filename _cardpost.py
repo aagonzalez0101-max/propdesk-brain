@@ -380,7 +380,8 @@ def roll():
         R = json.load(open("road.json", encoding="utf-8"))
         L = [json.loads(x) for x in open("live_paper.jsonl", encoding="utf-8") if x.strip()]
         today = datetime.datetime.now(CT).date().isoformat()          # user 10/11: stake = 5% of the MORNING roll, fixed all day
-        return R["start_roll"] + sum(r.get("net") or 0 for r in L if r.get("kind") == "LIVE" and R["start_date"] <= r.get("date", "") < today
+        dep = sum(d["amount"] for d in R.get("deposits", []) if d["date"] <= today)      # 10/14: DraftKings cash joins the roll (one roll, two wallets)
+        return R["start_roll"] + dep + sum(r.get("net") or 0 for r in L if r.get("kind") == "LIVE" and R["start_date"] <= r.get("date", "") < today
                                      and not r.get("exclude") and r.get("result") in ("WIN", "LOSS", "PUSH", "VOID"))
     except Exception:
         return None

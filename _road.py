@@ -10,12 +10,13 @@ R = json.load(open("road.json", encoding="utf-8"))
 S, G = R["start_date"], R["goal"]
 live = [r for r in L if r.get("kind") == "LIVE" and r.get("date", "") >= S and not r.get("exclude")]
 done = [r for r in live if r.get("result") in ("WIN", "LOSS", "PUSH", "VOID")]
-bal = R["start_roll"] + sum(r.get("net") or 0 for r in done)
+DEP = sum(d["amount"] for d in R.get("deposits", []) if d["date"] <= datetime.date.today().isoformat())
+bal = R["start_roll"] + DEP + sum(r.get("net") or 0 for r in done)
 day = (datetime.date.today() - datetime.date.fromisoformat(S)).days + 1
 pct = 100 * (bal - R["start_roll"]) / (G - R["start_roll"])
 print("ROAD TO $%d  --  day %d   start $%.2f -> now $%.2f   (%+.2f)   %.0f%% of the way" % (G, max(day, 0), R["start_roll"], bal, bal - R["start_roll"], max(pct, 0)))
 bar = int(max(0, min(1, (bal - R["start_roll"]) / (G - R["start_roll"]))) * 30)
-_morning = R["start_roll"] + sum(x.get("net") or 0 for x in done if x["date"] < datetime.date.today().isoformat())   # stake fixed on the morning roll
+_morning = R["start_roll"] + DEP + sum(x.get("net") or 0 for x in done if x["date"] < datetime.date.today().isoformat())   # stake fixed on the morning roll
 print("[" + "#" * bar + "-" * (30 - bar) + "]   today's stake (5%% of the morning roll $%.2f): $%.2f" % (_morning, R["stake_pct"] * _morning))
 by = collections.defaultdict(list)
 for r in done: by[r["date"]].append(r)
