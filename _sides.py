@@ -12,7 +12,7 @@ import sys, datetime, re
 sys.path.insert(0, ".")
 from betting import freeodds as F
 
-LEAGUE = {"nfl": 889, "cfb": 880, "nhl": 1456, "nba": 487}
+LEAGUE = {"nfl": 889, "cfb": 880, "nhl": 1456, "nba": 487, "mlb": 246}
 CT = datetime.timezone(datetime.timedelta(hours=-5))
 
 
@@ -106,8 +106,39 @@ def check(lg, what, price):
     print("no matching game/market for %r in the next 36h" % what)
 
 
+def post(hours=20):
+    """10/14 user (DraftKings sides): one Discord embed per day -- every game in the next `hours`, the Pinnacle fair price to BEAT at DraftKings
+    (ML each side, spread, total). Edge = DK price better than fair by 2%+ (about 5 cents on a -110 line)."""
+    import _cardpost as C
+    NL = chr(10); out = []
+    now = datetime.datetime.now(datetime.timezone.utc)
+    for lg in ("nfl", "cfb", "nhl", "nba", "mlb"):
+        try:
+            B = [g for g in board(lg) if g["t"] <= now + datetime.timedelta(hours=hours)]
+        except Exception as e:
+            print(lg, "board:", e); continue
+        for g in B:
+            bits = []
+            if "ml" in g:
+                ph, pa = devig(*g["ml"]); bits.append("ML %s %s / %s %s" % (g["away"][:18], amer(pa), g["home"][:18], amer(ph)))
+            if "sp" in g:
+                pts, h, a = g["sp"]; ph, pa = devig(h, a); bits.append("%s %+g %s" % (g["home"][:18], pts, amer(ph)))
+            if "tot" in g:
+                pts, o, u = g["tot"]; po, pu = devig(o, u); bits.append("o/u %g %s/%s" % (pts, amer(po), amer(pu)))
+            if bits:
+                out.append("`%s` **%s @ %s** (%s) -- %s" % (g["t"].astimezone(CT).strftime("%I:%M%p"), g["away"][:18], g["home"][:18], lg.upper(), " · ".join(bits)))
+    if not out:
+        print("no games in the window"); return
+    body = ("Pinnacle's fair price for every game. **Bet at DraftKings only when DK pays MORE than these** (about 5 cents better, e.g. fair -110 -> DK -105 or plus). "
+            "Ask me with the DK price to confirm." + NL + NL + NL.join(out[:40]))
+    C.post_embed("💵 DRAFTKINGS SIDES · fair prices to beat · %s" % datetime.datetime.now(CT).strftime("%a %m/%d"), body[:4000], 0x53D769)
+    print("posted %d games" % len(out))
+
+
 if __name__ == "__main__":
     a = sys.argv[1:]
+    if a[:1] == ["post"]:
+        post(); sys.exit(0)
     if len(a) >= 3:
         check(a[0].lower(), a[1], a[2])
     else:

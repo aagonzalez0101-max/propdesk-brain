@@ -284,6 +284,11 @@ def why_text(leg, S):
     if leg.get("beta"):
         P.append("🧪 **NFL BETA**: measured on 1 week (61%, holdout 49%) -- small stake or paper until Week 6 grades")
     P.append("🤖 Model **%.0f%%** %s" % (100 * leg["p"], "HIGHER" if over else "LOWER"))
+    # 10/14 user: DraftKings straights -- a leg we rate p is +EV as a single at any price better than its break-even
+    _pp = leg["p"]
+    if 0.5 < _pp < 0.97 and sp.upper() not in ESPORTS:
+        _am = -100 * _pp / (1 - _pp)
+        P.append("💵 DraftKings straight: bet at **%+d or better** (our %.0f%%)" % (round(_am), 100 * _pp))
     if reasons:
         P.append("✅ %s: %s" % (why.split(":")[0], reasons))
     if leg.get("sharp") is not None:
