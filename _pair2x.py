@@ -21,13 +21,26 @@ LG = {"NHL": 8, "WNBA": 3, "NBA": 7, "NFL": 9, "CFB": 15, "CS2": 265, "SOCCER": 
 
 # live PP standard board
 live = {}
+import time as _time
+_board_fail = []
 for sp, lg in LG.items():
-    try:
-        for l in P.prizepicks(lg, max_age=int(os.environ.get("PP_MAX_AGE", 180))):                      # 429s at max_age=0 -> a 3-minute-old board is fine
-            if l.get("kind") == "standard" and "+" not in (l.get("player") or ""):
-                live[(sp, M.norm(l["player"]), M.norm(l["stat"]))] = l
-    except Exception as e:
-        print(sp, "pp:", e)
+    # 10/14: the 7:45 cloud card found 2 legs vs 84 locally -- PrizePicks 429'd the NFL/NBA boards and each failure silently left that
+    # league EMPTY. Retry with backoff (30s / 60s / 90s) before giving up, and say loudly which boards are missing.
+    for _try in range(4):
+        try:
+            _bd = P.prizepicks(lg, max_age=int(os.environ.get("PP_MAX_AGE", 180)))                      # 429s at max_age=0 -> a 3-minute-old board is fine
+            for l in _bd:
+                if l.get("kind") == "standard" and "+" not in (l.get("player") or ""):
+                    live[(sp, M.norm(l["player"]), M.norm(l["stat"]))] = l
+            break
+        except Exception as e:
+            print(sp, "pp (try %d):" % (_try + 1), e)
+            if _try < 3:
+                _time.sleep(30 * (_try + 1))
+            else:
+                _board_fail.append(sp)
+    _time.sleep(3)
+print("PP boards loaded: %s%s" % (dict(collections.Counter(k[0] for k in live)), ("  MISSING: %s" % _board_fail) if _board_fail else ""))
 
 # 10/9 user: "nobody that we've used" -> skip every player already in an OPEN bet in the ledger
 USED = set()
