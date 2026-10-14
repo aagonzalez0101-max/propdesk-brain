@@ -530,6 +530,16 @@ try:
         if g0 * g1 <= 0 or min(abs(g0), abs(g1)) < 0.15:
             continue
         side = "over" if g0 > 0 else "under"
+        # 10/14 Brian Thomas Jr. O17.5: season avg 34.1 (two 40-yd September games) but his last 3 were 8 / 17 / 0 on 1-3 targets and the line
+        # fell to 16.5. Recent-role guard: if his LAST 3 games all went against the side, the leg is out, whatever the average says.
+        try:
+            _vk, _gp, _ek = _NR.STATS[l["stat"]]
+            _last3 = [_NR.f(r_, _ek or _vk) for r_ in sorted([r_ for r_ in _NR.W26 if _NR.norm(r_["player_display_name"]) == _NR.norm(l["player"]) and int(r_["week"]) < _wk],
+                                                             key=lambda r_: int(r_["week"]))[-3:]]
+            if len(_last3) == 3 and all((x_ < l["line"]) if side == "over" else (x_ > l["line"]) for x_ in _last3):
+                print("  NFL AGREE blocked (last 3 all against the %s: %s): %s %s %s" % (side, _last3, l["player"], l["stat"], l["line"])); continue
+        except Exception as e:
+            print("agree recent-role:", e)
         _p = 0.62 if min(abs(g0), abs(g1)) >= 0.20 else 0.60
         std.append(dict(sport="NFL", nfl_agree=True, paper=not NFL_AGREE_LIVE, player=l["player"], team=l.get("team"), opp=l.get("opp"), stat=l["stat"],
                         line=l["line"], side=side, p=_p, start=l["start"],
