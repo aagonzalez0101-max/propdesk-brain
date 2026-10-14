@@ -10,6 +10,31 @@ F = "paper_slips.jsonl"
 if not os.path.exists(F):
     raise SystemExit("no paper slips yet")
 rows = [json.loads(l) for l in open(F, encoding="utf-8") if l.strip()]
+# 10/14: CS2 legs graded 0-14 because the generic box-score helper summed the wrong maps (deStiny 13 HS / trindade 21 K vs the real 19 / 31).
+# CS2 legs now take the actual from cs2_paper.jsonl (the dedicated CS2 grader: same player, same line, same day +-1); CS2 legs graded the old
+# way are reset once so they regrade.
+import re as _re
+_n = lambda x: _re.sub(r"[^a-z0-9]", "", (x or "").lower())
+_CS = collections.defaultdict(list)
+if os.path.exists("cs2_paper.jsonl"):
+    for _l in open("cs2_paper.jsonl", encoding="utf-8"):
+        _r = json.loads(_l)
+        if _r.get("actual") is not None:
+            _CS[(_n(_r.get("player")), "hs" if _r.get("kind") == "hs" else "k")].append(((_r.get("start") or _r.get("ts") or "")[:10], float(_r.get("pp_line") or _r.get("line") or 0), float(_r.get("line") or 0), _r["actual"]))
+def _cs2_actual(g):
+    k = (_n(g["player"]), "hs" if "Head" in g["stat"] else "k"); d0 = datetime.date.fromisoformat(g["start"][:10])
+    c = [a for d, pl, ln, a in _CS.get(k, []) if d and abs((datetime.date.fromisoformat(d) - d0).days) <= 1 and float(g["line"]) in (pl, ln)]
+    c = c or [a for d, pl, ln, a in _CS.get(k, []) if d and abs((datetime.date.fromisoformat(d) - d0).days) <= 1]
+    return c[-1] if c else None
+for r in rows:
+    if r.get("cs2_regraded"):
+        continue
+    if any(g.get("sport") == "CS2" for g in r.get("legs", [])):
+        for g in r["legs"]:
+            if g.get("sport") == "CS2":
+                g.pop("result", None); g.pop("actual", None)
+        r["result"] = None
+    r["cs2_regraded"] = True
 now = datetime.datetime.now(datetime.timezone.utc)
 for r in rows:
     if r.get("result"):
@@ -21,8 +46,11 @@ for r in rows:
             if not st or datetime.datetime.fromisoformat(st.replace("Z", "+00:00")) > now - datetime.timedelta(hours=4):
                 res.append(None); continue
             day = st[:10]
-            leg = PC.fill(dict(sport=g["sport"], player=g["player"], stat=g["stat"], line=g["line"], side=g["side"], bet=False), day)
-            a = leg.get("actual")
+            if g["sport"] == "CS2":
+                a = _cs2_actual(g)
+            else:
+                leg = PC.fill(dict(sport=g["sport"], player=g["player"], stat=g["stat"], line=g["line"], side=g["side"], bet=False), day)
+                a = leg.get("actual")
             if a is not None:
                 g["actual"] = a
                 g["result"] = "PUSH" if a == g["line"] else ("W" if (a > g["line"]) == (g["side"] == "over") else "L")
