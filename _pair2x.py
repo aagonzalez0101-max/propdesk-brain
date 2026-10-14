@@ -376,6 +376,48 @@ try:
 except Exception as e:
     print("nba preseason unders:", e)
 
+# 10/14 user ("it was during the day bc i pushed you"): the PRESEASON BOX-SCORE scan that found Bronny / Horford / Curry, automated.
+# Every NBA preseason PP line vs THIS preseason's games: under in every game (2+), minutes-x-rate projection <= 85% of the line;
+# starters (25+ mpg last season played) blocked in a team's last 2 preseason games (dress rehearsal); bench players allowed.
+try:
+    import _bball as _BBx, _nba_presched as _PSx
+    _ids_x = _BBx.roster("nba"); _haveX = {M.norm(s_["player"]) for s_ in std}; _nx = 0
+    for (sp, pl, st), l in list(live.items()):
+        if sp != "NBAP" or l.get("kind") != "standard" or pl in _haveX or l["line"] < 2.5:
+            continue
+        _stx = datetime.datetime.fromisoformat(l["start"])
+        if _stx.astimezone(datetime.timezone.utc) < now:
+            continue
+        _pp = _BBx.COMBO.get(M.norm(l["stat"])); _ax = _ids_x.get(pl)
+        if not _pp or not _ax:
+            continue
+        _LX = _BBx.logs("nba", _ax[0])
+        _G = [g_ for g_ in _LX if g_.get("pre") and g_["date"] >= "2026-09-01" and g_["min"] > 0]
+        if len(_G) < 2:
+            continue
+        _vals = [sum(g_[p_] for p_ in _pp) for g_ in _G]; _mins = [g_["min"] for g_ in _G]
+        if not all(v_ < l["line"] for v_ in _vals):
+            continue
+        _w = [0.5, 0.3, 0.2][:len(_mins)]
+        _proj = sum(_vals) / sum(_mins) * sum(wi * m_ for wi, m_ in zip(_w, _mins[::-1])) / sum(_w)
+        if _proj > 0.85 * l["line"]:
+            continue
+        _reg = [g_ for g_ in _LX if not g_.get("pre")]
+        _last = max((g_["season"] for g_ in _reg), default=0); _regl = [g_ for g_ in _reg if g_["season"] == _last]
+        _mpg = sum(g_["min"] for g_ in _regl) / len(_regl) if _regl else 0
+        _dayx = _stx.astimezone(CT).date().isoformat()
+        if _mpg >= 25 and _PSx.late_preseason(l.get("team"), _dayx):
+            print("  preseason box under blocked (starter, late preseason): %s %s" % (l["player"], l["stat"])); continue
+        std.append(dict(sport="NBAP", nba_pre_under=True, paper=not NBAP_LIVE, player=l["player"], team=l.get("team"), opp=l.get("opp"), stat=l["stat"],
+                        line=l["line"], side="under", p=0.68, start=l["start"],
+                        why="Preseason box scan: %s in %s min this preseason (all under %s), proj %.1f; last-season %.0f mpg%s" % (
+                            "/".join("%d" % v_ for v_ in _vals), "/".join("%d" % m_ for m_ in _mins), l["line"], _proj, _mpg,
+                            " (bench, late preseason helps)" if _PSx.late_preseason(l.get("team"), _dayx) else "")))
+        _haveX.add(pl); _nx += 1
+    print("NBA preseason box-scan legs: %d" % _nx)
+except Exception as e:
+    print("preseason box scan:", e)
+
 # 10/13 user ("add that now to the model"): NHL ROLE GUARD. Podkolzin U2.5 SOG was carded off last season (15.4 min, 1.7 SOG) while
 # 2026-27 he plays 19.2 min with 3.4 SOG. Every NHL leg: this season's TOI vs last season's -- minutes UP 15%+ blocks an UNDER, minutes
 # DOWN 15%+ blocks an OVER; and with 3+ games this season, a leg whose side lost in 60%+ of them is blocked. Drops -> gate_drops.jsonl.

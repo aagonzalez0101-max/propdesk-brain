@@ -53,6 +53,52 @@ def promos():
     return out
 
 
+def taco_check(p):
+    """10/14 user (taco traps): the player's own recent games vs the PROMO line (promos are overs). Returns a one-line verdict or ''."""
+    import re, json as _j, urllib.request as _u
+    g = lambda url: _j.loads(_u.urlopen(_u.Request(url, headers={"User-Agent": "Mozilla/5.0"}), timeout=25).read())
+    ln, lg, st = p.get("promo_line"), str(p.get("league")), (p.get("stat") or "").lower()
+    if ln is None:
+        return ""
+    vals = None
+    try:
+        if lg == "MLB" and "hitter fantasy" in st:
+            pid = g("https://statsapi.mlb.com/api/v1/people/search?names=%s" % _u.quote(p["player"]))["people"][0]["id"]
+            def fs(s_):
+                single = s_["hits"] - s_["doubles"] - s_["triples"] - s_["homeRuns"]
+                return 3 * single + 5 * s_["doubles"] + 8 * s_["triples"] + 10 * s_["homeRuns"] + 2 * (s_["baseOnBalls"] + s_["hitByPitch"] + s_["runs"] + s_["rbi"]) + 5 * s_["stolenBases"]
+            sp = []
+            for gt in ("R", "F,D,L,W"):
+                d = g("https://statsapi.mlb.com/api/v1/people/%d/stats?stats=gameLog&season=%d&group=hitting&gameType=%s" % (pid, datetime.date.today().year, gt))
+                sp += [x for x in (d.get("stats") or [{}])[0].get("splits", [])]
+            sp.sort(key=lambda x: x["date"])
+            vals = [fs(x["stat"]) for x in sp[-15:]]
+        elif lg == "NHL":
+            q = g("https://search.d3.nhle.com/api/v1/search/player?culture=en-us&limit=3&q=%s" % _u.quote(p["player"]))[0]["playerId"]
+            L = g("https://api-web.nhle.com/v1/player/%s/game-log/20262027/2" % q).get("gameLog", [])
+            if len(L) < 5:
+                L += g("https://api-web.nhle.com/v1/player/%s/game-log/20252026/2" % q).get("gameLog", [])
+            key = "saves" if "save" in st else "shots" if "shot" in st else "points" if "point" in st else "assists" if "assist" in st else None
+            if key == "saves":
+                vals = [(r.get("shotsAgainst") or 0) - (r.get("goalsAgainst") or 0) for r in L if r.get("gamesStarted")][:15]
+            elif key:
+                vals = [r.get(key) or 0 for r in L][:15]
+        elif lg in ("NBA", "NBAP", "WNBA"):
+            import _bball as BB
+            a = BB.roster("wnba" if lg == "WNBA" else "nba").get(re.sub(r"[^a-z0-9]", "", p["player"].lower()))
+            pp = BB.COMBO.get(re.sub(r"[^a-z0-9]", "", st))
+            if a and pp:
+                L = [x for x in BB.logs("wnba" if lg == "WNBA" else "nba", a[0]) if x["min"] > 0]
+                vals = [sum(x[k] for k in pp) for x in L][-12:]
+    except Exception as e:
+        return "own-games check failed (%s)" % str(e)[:40]
+    if not vals:
+        return ""
+    hit = sum(v > ln for v in vals); rate = hit / len(vals)
+    flag = "strong" if rate >= 0.80 else "borderline" if rate >= 0.70 else "TRAP risk"
+    return "his last %d: over %s in %d (%.0f%%) -- %s" % (len(vals), ln, hit, 100 * rate, flag)
+
+
 def toast(title, body):
     ps = ("Add-Type -AssemblyName System.Windows.Forms; $n=New-Object System.Windows.Forms.NotifyIcon; $n.Icon=[System.Drawing.SystemIcons]::Information;"
           " $n.Visible=$true; $n.ShowBalloonTip(20000,'%s','%s',[System.Windows.Forms.ToolTipIcon]::Info); Start-Sleep -Seconds 21; $n.Dispose()"
@@ -88,6 +134,7 @@ def main(show_all=False):
             _C.post_embed("🎁 NEW PROMO%s on PrizePicks" % ("S" if len(new) > 1 else ""), NL.join(
                 "**%s** %s %s: ~~%s~~ → **%s** (%s) · %s" % (p["player"], p["league"], p["stat"], p["line"], p["promo_line"], p["kind"],
                 datetime.datetime.fromisoformat(p["start"]).astimezone(CT).strftime("%a %I:%M %p TX") if p.get("start") else "")
+                + ((NL + "   -> " + taco_check(p)) if taco_check(p) else "")
                 for p in new) + NL + NL + "Tacos can be traps -- check his own games vs the PROMO line before locking.", 0xFF4FD8)
         except Exception as e:
             print("discord promo post:", e)
