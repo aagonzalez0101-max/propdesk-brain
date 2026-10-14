@@ -31,7 +31,7 @@ def run(label, args, timeout=1800, log=None, _retry=True):
     line = "%-34s %s  %4.0fs" % (label, "ok  " if ok else "FAIL", time.time() - t0)
     print(line, flush=True)
     if log:
-        log.write("\n===== %s =====\n%s\n" % (line, out[-6000:]))
+        log.write("\n===== %s =====\n%s\n" % (line, out[-(20000 if "_pair2x" in " ".join(args) else 6000):]))
         log.flush()
     return ok, out
 
