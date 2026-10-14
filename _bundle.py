@@ -240,10 +240,13 @@ def pull():
         os.remove(dp); raise SystemExit("remote bundle is corrupt -- kept every local file; push a good copy with: python _bundle.py push --force")
     # 10/11: a pull overwrote a paper slip logged locally minutes earlier -> keep local rows, merge them back in after unpacking
     keep = {f: open(f, encoding="utf-8").read() for f in ["live_paper.jsonl"] + list(MERGE_KEYS) if os.path.exists(f)}
+    road_local = open("road.json", encoding="utf-8").read() if os.path.exists("road.json") else None   # 10/14: a pull wiped the DK deposit
     unpack(dp); os.remove(dp)
     for f, local in keep.items():
         remote = open(f, encoding="utf-8").read() if os.path.exists(f) else ""
         open(f, "w", encoding="utf-8").write(merge_ledger(local, remote) if f == "live_paper.jsonl" else merge_rows(local, remote, MERGE_KEYS[f]))
+    if road_local is not None:
+        open("road.json", "w", encoding="utf-8").write(road_local)           # the laptop owns road.json -- never take the cloud's copy
     json.dump({"pulled_updated": a["updated_at"]}, open(STATE, "w"))
     print("pulled bundle (%s), ledger + paper files row-merged" % a["updated_at"])
 
