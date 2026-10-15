@@ -9,3 +9,4 @@
 __pycache__/
 # Playwright CLI output (may contain credentials)
 .playwright-cli/
+data/btc_1m.csv

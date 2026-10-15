@@ -388,7 +388,11 @@ def roll(book="PrizePicks"):
         today = datetime.datetime.now(CT).date().isoformat()          # user 10/11: stake = 5% of the MORNING roll, fixed all day
         mine = lambda b: book is None or (b or "PrizePicks") == book
         base = (R["start_roll"] if book in (None, "PrizePicks") else 0) + sum(d["amount"] for d in R.get("deposits", []) if d["date"] <= today and mine(d.get("book")))
-        return base + sum(r.get("net") or 0 for r in L if r.get("kind") == "LIVE" and R["start_date"] <= r.get("date", "") < today and mine(r.get("book"))
+        since = R["start_date"]
+        rs = [x for x in R.get("resets", []) if book and x["book"] == book and x["date"] <= today]   # 10/14: a book restarted at its balance
+        if rs:
+            base, since = rs[-1]["roll"], rs[-1]["date"]
+        return base + sum(r.get("net") or 0 for r in L if r.get("kind") == "LIVE" and since <= r.get("date", "") < today and mine(r.get("book"))
                           and not r.get("exclude") and r.get("result") in ("WIN", "LOSS", "PUSH", "VOID"))
     except Exception:
         return None
