@@ -73,6 +73,8 @@ def main(minutes):
                     print("%s: %s due but only %.0f min left in this run -- next run takes it" % (now.strftime("%H:%M"), name, (end - time.time()) / 60))
                     break
                 print("%s CT -- %s" % (now.strftime("%H:%M"), name), flush=True)
+                if name == "grade" and "%s grade_sports" % day not in done:
+                    cmds = [["_daily.py", "grade"]]              # the 12:45 AM sports grade was missed (chain gap) -> grade everything now
                 for c in cmds:
                     run(c, to)
                 done[key] = now.isoformat(timespec="minutes"); json.dump(done, open(DONE_F, "w")); sync(); did = True
