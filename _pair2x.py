@@ -192,7 +192,7 @@ try:
                 print("fd fantasy:", e)
         own = hit if side == "over" else 1 - hit
         std.append(dict(sport="NFL", player=l["player"], team=l.get("team"), opp=l.get("opp"), stat=l["stat"], line=l["line"], side=side,
-                        p=0.61, why="NFL BETA own-rate: %d of %d games %s, avg %.1f (1 week measured: 61%%, holdout 49%%)"
+                        p=0.61, proj=round(avg, 1), proj_why="his 2026 average", why="NFL BETA own-rate: %d of %d games %s, avg %.1f (1 week measured: 61%%, holdout 49%%)"
                         % (round(own * len(vals)), len(vals), side, avg), start=l["start"], img=l.get("img"), beta=True))
         n_nfl += 1
     # cap: the 8 NFL legs furthest from their line (a flood of thin legs is how off-book slips get built)
@@ -287,7 +287,8 @@ try:
             if not lv or float(lv["line"]) != float(r["line"]):
                 print("  soccer HIT not live at %s: %s %s" % (r["line"], r["player"], r["stat"])); continue
             std.append(dict(sport="SOCCER", soccer_hit=True, player=r["player"], team=r.get("team"), opp=r.get("opp"), stat=r["stat"],
-                            line=r["line"], side=r["side"], p=0.70, start=r["start"],
+                            line=r["line"], side=r["side"], p=0.70, start=r["start"], proj=r.get("adj_avg") or r.get("avg"),
+                            proj_why="last %d starts, adjusted for the opponent (%s; script %s)" % (r.get("n") or 15, r.get("factor_why") or "neutral", r.get("script") or "?"),
                             why="Club soccer HIT passes (measured 42-15, 73.7%%): %d of %d starts %s, avg %.1f" % (r.get("hits") or 0, r.get("n") or 0, r["side"], r.get("avg") or 0)))
             print("  SOCCER HIT leg: %s %s %s %s" % (r["player"], r["side"], r["line"], r["stat"]))
 except Exception as e:
@@ -324,6 +325,7 @@ try:
         tk = r["call"] == "TAKE UNDER"
         std.append(dict(sport="NHL", nhl_under=True, player=lv["player"], team=lv.get("team") or r.get("team"), opp=lv.get("opp") or r.get("opp"),
                         stat=lv["stat"], line=lv["line"], side="under", p=0.70 if tk else 0.62, start=lv["start"],
+                        proj=r.get("adj_mean") or r.get("avg"), proj_why="matchup-adjusted average (opponent + his role)",
                         why="NHL screen %s (measured %s): avg %s, h2h %s" % (r["call"], "29-11, 72.5%" if tk else "58-34, 63%", r.get("adj_mean") or r.get("avg"), r.get("h2h"))))
         _have.add(pn)
         print("  NHL UNDER leg: %s %s U%s (%s, called at %s)" % (lv["player"], lv["stat"], lv["line"], r["call"], r["line"]))
@@ -383,7 +385,7 @@ try:
         if not tk and (_pj is None or _pj > 0.85 * float(lv["line"])):
             continue                     # 10/13: both preseason-under misses were LEANs within 15% of the line (Wemby 2.6 vs 3, McDaniels 19.9 vs 21.5)
         std.append(dict(sport="NBAP", nba_pre_under=True, paper=not NBAP_LIVE, player=lv["player"], team=lv.get("team") or r.get("team"), opp=lv.get("opp") or r.get("opp"),
-                        stat=lv["stat"], line=lv["line"], side="under", p=0.72 if tk else 0.62, start=lv["start"],
+                        stat=lv["stat"], line=lv["line"], side="under", p=0.72 if tk else 0.62, start=lv["start"], proj=_pj, proj_why="preseason rate x projected minutes",
                         why="NBA preseason %s (graded unders 20-2): proj %s vs line %s" % (r["call"], r.get("adj_mean") or r.get("proj"), lv["line"])))
         _have2.add(pn)
         print("  NBA PRESEASON UNDER leg: %s %s U%s (%s, called at %s)" % (lv["player"], lv["stat"], lv["line"], r["call"], r["line"]))
@@ -424,7 +426,7 @@ try:
         if _PSx.late_preseason(l.get("team"), _dayx):            # 10/15 audit: any role (see above)
             print("  preseason box under blocked (late preseason, any role): %s %s" % (l["player"], l["stat"])); continue
         std.append(dict(sport="NBAP", nba_pre_under=True, paper=not NBAP_LIVE, player=l["player"], team=l.get("team"), opp=l.get("opp"), stat=l["stat"],
-                        line=l["line"], side="under", p=0.68, start=l["start"],
+                        line=l["line"], side="under", p=0.68, start=l["start"], proj=round(_proj, 1), proj_why="preseason per-minute rate x recent minutes",
                         why="Preseason box scan: %s in %s min this preseason (all under %s), proj %.1f; last-season %.0f mpg%s" % (
                             "/".join("%d" % v_ for v_ in _vals), "/".join("%d" % m_ for m_ in _mins), l["line"], _proj, _mpg,
                             " (bench, late preseason helps)" if _PSx.late_preseason(l.get("team"), _dayx) else "")))
@@ -543,7 +545,8 @@ try:
             print("agree recent-role:", e)
         _p = 0.62 if min(abs(g0), abs(g1)) >= 0.20 else 0.60
         std.append(dict(sport="NFL", nfl_agree=True, gap=round(min(abs(g0), abs(g1)), 3), paper=not NFL_AGREE_LIVE, player=l["player"], team=l.get("team"), opp=l.get("opp"), stat=l["stat"],
-                        line=l["line"], side=side, p=_p, start=l["start"],
+                        line=l["line"], side=side, p=_p, start=l["start"], proj=round(_rd["proj"], 1),
+                        proj_why="team volume x his %.0f%% share, vs %s defense (own avg %.1f)" % (100 * _rd["share"], _opp, _rw),
                         why="NFL AGREE: own avg %.1f + role model %.1f (share %.0f%% of team volume) both %s %s (backtest 60%%)" % (_rw, _rd["proj"], 100 * _rd["share"], side, l["line"])))
         _have3.add(pl); _n_ag += 1
         if (l["player"], l["stat"], l["line"]) not in _ag_seen:
@@ -603,7 +606,8 @@ try:
         else:
             continue
         std.append(dict(sport="NFL", qb_out=True, qb_out_crazy=_crazy, player=l["player"], team=l.get("team"), opp=l.get("opp"), stat=l["stat"],
-                        line=l["line"], side="under", p=_p, start=l["start"], gap=round(_ratio - 1, 3),
+                        line=l["line"], side="under", p=_p, start=l["start"], gap=round(_ratio - 1, 3), proj=round(_avg * (0.58 if _ps == "TE" else 0.80), 1),
+                        proj_why="his avg %.1f x backup-QB factor %s" % (_avg, "0.58" if _ps == "TE" else "0.80"),
                         why="QB OUT (%s): backup-QB games 2025 -- %s receiving yards ran %s of average (%s under). His avg %.1f vs line %g (PP at %.0f%% of his avg)"
                             % (_starter.get(l.get("team"), _starter.get({"JAC": "JAX", "LAR": "LA", "WSH": "WAS"}.get(l.get("team"), ""), ("?",)))[0], _ps,
                                "0.58x" if _ps == "TE" else "0.80x", "70%" if _ps == "TE" else "59%", _avg, l["line"], 100 * _ratio)))
@@ -662,6 +666,7 @@ try:
                 continue
             std.append(dict(sport="NBA", nba_role_under=(_sd == "under"), nba_role_over=(_sd == "over"), paper=not NBA_ROLE_LIVE[_sd], player=l["player"], team=l.get("team"),
                             opp=l.get("opp"), stat=l["stat"], line=l["line"], side=_sd, p=0.65 if _sd == "under" else 0.55, start=l["start"],
+                            proj=round(role_, 1), proj_why="%.0f projected minutes x per-minute rate (own avg %.1f)" % (pmin_, raw_),
                             why="NBA ROLE %s: own avg %.1f + minutes model %.1f (%.0f min) both 10%%+ %s %s" % (_sd.upper(), raw_, role_, pmin_, _sd, l["line"])))
             _have4.add(M.norm(l["player"])); _n_nr += 1
             if (l["player"], l["stat"], _day) not in _seen_nr:
@@ -910,6 +915,15 @@ def _research_ok(x):
             return False, "tiny line %g" % x["line"]
         if x["stat"] in ("Receptions", "Rec Targets", "Rush Attempts") and x["line"] <= 1.5:
             return False, "tiny line %g" % x["line"]
+    #   3. NFL: a player who missed 2+ straight games is out (Dowdle last played 9/20 and was on a forced pair 10/15); bye = 1 week
+    if x.get("sport") == "NFL" and x.get("start"):
+        try:
+            _wk_ = 1 + (datetime.datetime.fromisoformat(x["start"]).astimezone(CT).date() - datetime.date(2026, 9, 8)).days // 7
+            _pw = [int(r_["week"]) for r_ in _NR.W26 if _NR.norm(r_["player_display_name"]) == _NR.norm(x["player"]) and int(r_["week"]) < _wk_]
+            if _pw and _wk_ - max(_pw) >= 4:
+                return False, "last played week %d (now week %d)" % (max(_pw), _wk_)
+        except Exception:
+            pass
     if x.get("soccer_hit"):
         m_ = re.search(r"(\d+) of (\d+) starts", x.get("why", ""))
         if m_ and int(m_.group(2)) >= 6 and int(m_.group(1)) / int(m_.group(2)) < 0.5:
@@ -923,6 +937,35 @@ for x in std:
     else:
         print("  RESEARCH GATE drops %s %s %g %s -- %s" % (x["player"], x["side"], x["line"], x["stat"], why_))
 std = _kept_rg
+
+# 10/15 user ("projected 25 based on offense/defense/team, then the line shows 23 so it's an over, or 28 so it's an under" + market prior):
+# every leg shows PROJ (what the model says, before the line) vs LINE -> HIGHER/LOWER, and its win chance is nudged by its MARKET's
+# history (_history.py: every archived PP opening line graded -- e.g. NFL rush yards under 62% of 108, NFL receiving yards over 54% of 227).
+# p_final = p_model + 0.5 x (market side rate - 50%), markets with 30+ graded lines only. Ranks overs and unders on equal footing.
+_MKT = {}
+try:
+    _HS = {"NBAP": "NBA"}
+    for _x in (json.loads(x_) for x_ in open("pp_history.jsonl", encoding="utf-8") if x_.strip()):
+        if _x["res_open"] != "push":
+            _m = _MKT.setdefault((_x["sport"], _x["stat"]), [0, 0]); _m[0] += _x["res_open"] == "over"; _m[1] += 1
+except Exception as e:
+    print("market prior:", e)
+for x in std:
+    _m = _MKT.get(({"NBAP": "NBA"}.get(x["sport"], x["sport"]), x["stat"]))
+    if _m and _m[1] >= 30 and not x.get("promo"):
+        _rate = _m[0] / _m[1] if x["side"] == "over" else 1 - _m[0] / _m[1]
+        x["p_model"] = x["p"]
+        x["p"] = round(min(0.80, max(0.40, x["p"] + 0.5 * (_rate - 0.5))), 3)
+        x["market"] = "%s %s: %s %.0f%% of %d" % (x["sport"], x["stat"], x["side"], 100 * _rate, _m[1])
+    if x.get("proj") is not None:
+        _pr = float(x["proj"])
+        _call = "HIGHER" if _pr > x["line"] else "LOWER"
+        x["why"] = "PROJ %.1f (%s) vs LINE %g -> %s%s%s | %s" % (_pr, x.get("proj_why", "model"), x["line"], _call,
+                   "" if (_call == "HIGHER") == (x["side"] == "over") else " [PROJ DISAGREES WITH SIDE]",
+                   (" | market: " + x["market"]) if x.get("market") else "", x.get("why", ""))
+    elif x.get("market"):
+        x["why"] = "market: %s | %s" % (x["market"], x.get("why", ""))
+print("market prior applied to %d of %d legs" % (sum(1 for x in std if x.get("market")), len(std)))
 
 # 10/14 user ("make shit bettable asap and fix as we go"): PROBATION tier -- a rule with a positive backtest but no forward proof yet bets at
 # HALF stake (2.5% of the roll) from day one: NFL AGREE (60% backtest), NBA preseason unders (TAKE 21-2), NBA ROLE UNDERS (WNBA 71%).
@@ -942,7 +985,7 @@ print("probation rules live: %s" % {k: ("HALF-STAKE BET" if v else "back to PAPE
 probation = lambda s: any(s.get(t) and _PROB[t] for t in _PROB) and not (
     (s.get("nfl_agree") and NFL_AGREE_LIVE) or (s.get("nba_role_under") and NBA_ROLE_LIVE["under"]) or (s.get("nba_pre_under") and NBAP_LIVE))
 money_ok = lambda s: bool(s.get("qb_out")) or probation(s) or bool(s.get("promo")) or (bool(s.get("beta")) and NFL_BETA_LIVE) or bool(s.get("soccer_hit")) or bool(s.get("nhl_under")) or (bool(s.get("nba_pre_under")) and NBAP_LIVE) or (bool(s.get("nfl_agree")) and NFL_AGREE_LIVE) or (bool(s.get("nba_role_under")) and NBA_ROLE_LIVE["under"]) or (bool(s.get("nba_role_over")) and NBA_ROLE_LIVE["over"]) or (s["sport"] in ("NHL", "WNBA") and not s.get("paper"))
-CRAZY = lambda s: bool(s.get("promo")) or s["p"] >= 0.66 or bool(s.get("qb_out_crazy"))
+CRAZY = lambda s: bool(s.get("promo")) or s.get("p_model", s["p"]) >= 0.66 or bool(s.get("qb_out_crazy"))   # 10/15: the model's own p, not the market-nudged one
 by_fam = collections.defaultdict(list)
 for s in sorted(std, key=lambda s: (-s["p"], -s.get("gap", 0))):
     by_fam[FAM(s)].append(s)
