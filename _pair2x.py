@@ -1034,8 +1034,53 @@ try:
         _inslip = {(g["player"], (g.get("start") or "")[:10]) for t in fresh for g in t[1]} | posted_players
         _SF = "_solo_alerted.json"
         _sa = set(json.load(open(_SF, encoding="utf-8"))) if os.path.exists(_SF) else set()
-        _solo = [x for x in sorted(std, key=lambda s: (-s["p"], -s.get("gap", 0))) if money_ok(x) and x.get("kind", "standard") == "standard"
-                 and (x["player"], (x.get("start") or "")[:10]) not in _inslip and "%s|%s|%s|%s" % (x["player"], x["stat"], x["line"], x["side"]) not in _sa][:5]
+        # "crazy" = PP just moved the line our way: the last different standard line for this player+stat (lines.db, 3 days) was 15%+
+        # tougher (Allgeier rush att 6.5 -> 4.5 on an over). A big % gap alone is NOT crazy -- tiny lines (O3.5 rec yds) make it trivial.
+        import sqlite3 as _sq
+        _ldb = _sq.connect("lines.db") if os.path.exists("lines.db") else None
+        def _moved_our_way(x):
+            if not _ldb:
+                return None
+            cut_ = (datetime.datetime.now(CT) - datetime.timedelta(days=3)).strftime("%Y-%m-%dT%H%M%S")
+            r_ = _ldb.execute("select line from pp where player=? and stat=? and kind='standard' and line!=? and last_seen>=? order by last_seen desc limit 1",
+                              (x["player"], x["stat"], x["line"], cut_)).fetchone()
+            if not r_:
+                return None
+            mv = (r_[0] - x["line"]) / max(r_[0], 0.5) * (1 if x["side"] == "over" else -1)
+            need = 5.0 if "Yds" in x["stat"] or "Yards" in x["stat"] else 1.0   # 1-yard moves on O5.5 rec yds are noise, not a pull
+            return r_[0] if mv >= 0.15 and abs(r_[0] - x["line"]) >= need else None
+        _solo = []
+        for x in sorted(std, key=lambda s: (-s["p"], -s.get("gap", 0))):
+            if money_ok(x) and x.get("kind", "standard") == "standard" and (x["player"], (x.get("start") or "")[:10]) not in _inslip                     and "%s|%s|%s|%s" % (x["player"], x["stat"], x["line"], x["side"]) not in _sa:
+                _was = _moved_our_way(x)
+                if _was is not None or CRAZY(x):
+                    x["was_line"] = _was
+                    _solo.append(x)
+        _solo = _solo[:3]
+        # 10/14 user: "if theres a crazy pull like that, you force a pair". A CRAZY solo leg (promo, p >= 66%, or an edge of 25%+ off the
+        # line) gets the best partner we have: a fresh BET-eligible leg first, else a BET-eligible leg already on a posted slip, else any
+        # 60%+ leg -- different team and game. Posted as a real 2-pick (half stake if either leg is probation), outside the 5-a-day cap.
+        _forced = []
+        for x in _solo:
+            _ok = lambda y: y is not x and y["team"] != x["team"] and {y["team"], y.get("opp")} != {x["team"], x.get("opp")} and y.get("kind", "standard") == "standard"                 and all(y is not g for t in _forced for g in t)
+            _pool = sorted([y for y in std if _ok(y)], key=lambda y: (-y["p"], -y.get("gap", 0)))
+            _mate = next((y for y in _pool if money_ok(y) and (y["player"], (y.get("start") or "")[:10]) not in _inslip), None)                 or next((y for y in _pool if money_ok(y)), None) or next((y for y in _pool if y["p"] >= 0.60), None)
+            if _mate:
+                _forced.append([x, _mate])
+        for grp_ in _forced:
+            for g in grp_:
+                g["probation"] = bool(probation(g))
+            _half = any(g["probation"] for g in grp_) or not all(money_ok(g) for g in grp_)
+            C.post_embed("🚨 FORCED PAIR · crazy line, %s %s %g%s -- locked in with our best partner" % (grp_[0]["player"], grp_[0]["stat"], grp_[0]["line"],
+                         " (was %g)" % grp_[0]["was_line"] if grp_[0].get("was_line") is not None else ""),
+                         "Partner: **%s** %s %g %s (%.0f%%)%s" % (grp_[1]["player"], "HIGHER" if grp_[1]["side"] == "over" else "LOWER", grp_[1]["line"], grp_[1]["stat"],
+                                                                   100 * grp_[1]["p"], "" if money_ok(grp_[1]) else " -- paper-tier partner, half stake"), 0xFF3B3B)
+            C.post_slip(99, grp_, grp_[0]["p"] * grp_[1]["p"], stake=(0.025 if _half else 0.05) * rl if rl else None, mult=3.0, be=0.577)
+            print("FORCED PAIR posted:", " / ".join(g["player"] for g in grp_))
+        _solo = [x for x in _solo if not any(x is t[0] for t in _forced)]
+        if _forced:
+            _sa |= {"%s|%s|%s|%s" % (t[0]["player"], t[0]["stat"], t[0]["line"], t[0]["side"]) for t in _forced}
+            json.dump(sorted(_sa), open(_SF, "w", encoding="utf-8"))
         if _solo:
             C.post_embed("⚡ SOLO LEG · qualifies, no fresh partner -- pair it or play it now", chr(10).join(
                 "%s **%s** %s %g %s · %.0f%%%s · %s" % ("🔺" if x["side"] == "over" else "🔻", x["player"], "HIGHER" if x["side"] == "over" else "LOWER", x["line"], x["stat"],
