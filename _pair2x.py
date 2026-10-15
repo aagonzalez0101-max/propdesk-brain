@@ -541,7 +541,7 @@ try:
         except Exception as e:
             print("agree recent-role:", e)
         _p = 0.62 if min(abs(g0), abs(g1)) >= 0.20 else 0.60
-        std.append(dict(sport="NFL", nfl_agree=True, paper=not NFL_AGREE_LIVE, player=l["player"], team=l.get("team"), opp=l.get("opp"), stat=l["stat"],
+        std.append(dict(sport="NFL", nfl_agree=True, gap=round(min(abs(g0), abs(g1)), 3), paper=not NFL_AGREE_LIVE, player=l["player"], team=l.get("team"), opp=l.get("opp"), stat=l["stat"],
                         line=l["line"], side=side, p=_p, start=l["start"],
                         why="NFL AGREE: own avg %.1f + role model %.1f (share %.0f%% of team volume) both %s %s (backtest 60%%)" % (_rw, _rd["proj"], 100 * _rd["share"], side, l["line"])))
         _have3.add(pl); _n_ag += 1
@@ -738,7 +738,7 @@ except Exception as e:
 print()
 print("STANDARD (our model) + GOBLIN (sharp-priced) pairs -- the payout must clear the 'needs' column on your screen")
 used = set(); n = 0; teams_used = set()
-for s in sorted(std, key=lambda s: -s["p"]):
+for s in sorted(std, key=lambda s: (-s["p"], -s.get("gap", 0))):
     if s["team"] in teams_used:
         continue                                # 10/8 lesson: 3 Carolina legs across 3 slips died in one 7-2 blowout -> 1 leg per team, all slips
     teams_used.add(s["team"])
@@ -852,7 +852,7 @@ probation = lambda s: any(s.get(t) and _PROB[t] for t in _PROB) and not (
 money_ok = lambda s: probation(s) or bool(s.get("promo")) or (bool(s.get("beta")) and NFL_BETA_LIVE) or bool(s.get("soccer_hit")) or bool(s.get("nhl_under")) or (bool(s.get("nba_pre_under")) and NBAP_LIVE) or (bool(s.get("nfl_agree")) and NFL_AGREE_LIVE) or (bool(s.get("nba_role_under")) and NBA_ROLE_LIVE["under"]) or (bool(s.get("nba_role_over")) and NBA_ROLE_LIVE["over"]) or (s["sport"] in ("NHL", "WNBA") and not s.get("paper"))
 CRAZY = lambda s: bool(s.get("promo")) or s["p"] >= 0.66
 by_fam = collections.defaultdict(list)
-for s in sorted(std, key=lambda s: -s["p"]):
+for s in sorted(std, key=lambda s: (-s["p"], -s.get("gap", 0))):
     by_fam[FAM(s)].append(s)
 used_team, used_leg = set(), set()
 
@@ -874,7 +874,7 @@ def _build(cands, n):
 
 k = 0; slips_txt = []; slips = []
 print("\nLEAGUE SLIPS (one per league; 3-pick 6x needs 55%/leg, 2-pick 3x needs 57.7%):")
-_promos_wild = [s for s in sorted(std, key=lambda s: -s["p"]) if s.get("promo")]
+_promos_wild = [s for s in sorted(std, key=lambda s: (-s["p"], -s.get("gap", 0))) if s.get("promo")]
 for fam in sorted(by_fam, key=lambda f: -max(s["p"] for s in by_fam[f])):
     # a promo is crazy value by definition (~90%) -> it may anchor ANY league's slip (promo + that league's 2 best legs = the best bet we have)
     _free = [p_ for p_ in _promos_wild if id(p_) not in used_leg and FAM(p_) != fam]
@@ -908,7 +908,7 @@ for fam in sorted(by_fam, key=lambda f: -max(s["p"] for s in by_fam[f])):
     tag = "BET" if all(money_ok(g) for g in grp) else "PAPER"
     slips.append((k, grp, ph, mult, tag, fam))
 # crazy-value mixer: leftover legs from different leagues, only promos / projections way past the line
-left = [s for s in sorted(std, key=lambda s: -s["p"]) if id(s) not in used_leg and CRAZY(s)]
+left = [s for s in sorted(std, key=lambda s: (-s["p"], -s.get("gap", 0))) if id(s) not in used_leg and CRAZY(s)]
 grp = _build(left, 3)
 if grp and len({FAM(g) for g in grp}) > 1:
     for g in grp:
@@ -1027,6 +1027,24 @@ try:
     if room == 0:
         print("daily cap reached (5 bets/slips today) -- nothing new posted")
     print("slips: %d qualify, %d new" % (len(slips), len(fresh)))
+    # 10/14 user ("how tf did we not flag Allgeier 4.5 rush atts"): Allgeier O4.5 rush att passed NFL AGREE (avg 7.6, role 5.7) but the NFL
+    # slip was already posted (BTJ/Raridon), so he had no fresh partner and never surfaced; PP moved it to 6.5 within minutes. A BET-eligible
+    # leg that lands on no slip now posts ONCE as a solo-leg alert -- pair it with anything on the card or play it on a promo.
+    try:
+        _inslip = {(g["player"], (g.get("start") or "")[:10]) for t in fresh for g in t[1]} | posted_players
+        _SF = "_solo_alerted.json"
+        _sa = set(json.load(open(_SF, encoding="utf-8"))) if os.path.exists(_SF) else set()
+        _solo = [x for x in sorted(std, key=lambda s: (-s["p"], -s.get("gap", 0))) if money_ok(x) and x.get("kind", "standard") == "standard"
+                 and (x["player"], (x.get("start") or "")[:10]) not in _inslip and "%s|%s|%s|%s" % (x["player"], x["stat"], x["line"], x["side"]) not in _sa][:5]
+        if _solo:
+            C.post_embed("⚡ SOLO LEG · qualifies, no fresh partner -- pair it or play it now", chr(10).join(
+                "%s **%s** %s %g %s · %.0f%%%s · %s" % ("🔺" if x["side"] == "over" else "🔻", x["player"], "HIGHER" if x["side"] == "over" else "LOWER", x["line"], x["stat"],
+                                                      100 * x["p"], " · 🟡 half stake" if probation(x) else "", x.get("why", "")[:160]) for x in _solo), 0xFFD400)
+            _sa |= {"%s|%s|%s|%s" % (x["player"], x["stat"], x["line"], x["side"]) for x in _solo}
+            json.dump(sorted(_sa), open(_SF, "w", encoding="utf-8"))
+            print("SOLO legs posted:", len(_solo))
+    except Exception as e:
+        print("solo legs:", e)
     if os.environ.get("NEW_ONLY") and not fresh:
         raise SystemExit(0)                                            # scanner: nothing new -> no Discord noise
     slips = fresh
