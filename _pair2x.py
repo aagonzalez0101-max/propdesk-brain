@@ -957,6 +957,7 @@ for x in std:
         x["p_model"] = x["p"]
         x["p"] = round(min(0.80, max(0.40, x["p"] + 0.3 * (_rate - 0.5))), 3)   # 10/15 out-of-sample: 61% markets ran 53.5% the next week -> ~30% survives
         x["market"] = "%s %s: %s %.0f%% of %d" % (x["sport"], x["stat"], x["side"], 100 * _rate, _m[1])
+        x["mkt_rate"] = _rate
     if x.get("proj") is not None:
         _pr = float(x["proj"])
         _call = "HIGHER" if _pr > x["line"] else "LOWER"
@@ -991,10 +992,18 @@ money_ok = lambda s: bool(s.get("qb_out")) or _FULL(s) or probation(s) or bool(s
 # 10/15 user: "6.5% first 3 if it's crazy good, if not we keep it going -- don't hold a slot because later will be good too, just lower the
 # stake after that" (two6zero: lower the stake later on). Tiered by the slip's place in the day (game-day count):
 #   slips 1-3: 6.5% if the slip is STRONG (joint p >= 0.44 = two ~66% legs), else 5%;  slips 4-6: 2.5%;  hard stop at 6
-MAX_SLIPS, STAKE, STRONG_PH = 6, 0.065, 0.44
-def _stake_for(pos, ph):
+# 10/15 user, refined: "it only stays at 6.5% if it passes at a very high or very low projection and is backed from history". A STRONG
+# leg = (1) its projection sits 20%+ past the line on its side, and (2) history backs it: a measured rule put it there (money_ok) AND its
+# market's graded record doesn't run against that side (< 50%). A slip is strong only when EVERY leg is.
+MAX_SLIPS, STAKE, STRONG_GAP = 6, 0.065, 0.20
+def _strong_leg(g):
+    if g.get("proj") is None or not g.get("line"):
+        return False
+    gap = (float(g["proj"]) - g["line"]) / g["line"] * (1 if g["side"] == "over" else -1)
+    return gap >= STRONG_GAP and money_ok(g) and g.get("mkt_rate", 0.5) >= 0.5
+def _stake_for(pos, grp):
     if pos < 3:
-        return STAKE if ph >= STRONG_PH else 0.05
+        return STAKE if all(_strong_leg(g) for g in grp) else 0.05
     return 0.025
 CRAZY = lambda s: bool(s.get("promo")) or s.get("p_model", s["p"]) >= 0.66 or bool(s.get("qb_out_crazy"))   # 10/15: the model's own p, not the market-nudged one
 by_fam = collections.defaultdict(list)
@@ -1234,7 +1243,7 @@ try:
                          " (was %g)" % grp_[0]["was_line"] if grp_[0].get("was_line") is not None else ""),
                          "Partner: **%s** %s %g %s (%.0f%%)%s" % (grp_[1]["player"], "HIGHER" if grp_[1]["side"] == "over" else "LOWER", grp_[1]["line"], grp_[1]["stat"],
                                                                    100 * grp_[1]["p"], "" if money_ok(grp_[1]) else " -- paper-tier partner, half stake"), 0xFF3B3B)
-            C.post_slip(99, grp_, grp_[0]["p"] * grp_[1]["p"], stake=(0.025 if _half else (STAKE if grp_[0]["p"] * grp_[1]["p"] >= STRONG_PH else 0.05)) * rl if rl else None, mult=3.0, be=0.577)
+            C.post_slip(99, grp_, grp_[0]["p"] * grp_[1]["p"], stake=(0.025 if _half else (STAKE if all(_strong_leg(g) for g in grp_) else 0.05)) * rl if rl else None, mult=3.0, be=0.577)
             print("FORCED PAIR posted:", " / ".join(g["player"] for g in grp_))
         _solo = [x for x in _solo if not any(x is g for t in _forced for g in t)]
         if _forced:
@@ -1255,13 +1264,13 @@ try:
     _h = datetime.datetime.now(CT).hour
     C.post_embed((("🌙 OVERNIGHT EDGE · %s" if (_h >= 23 or _h < 7) else "🆕 NEW LINES · %s") if os.environ.get("NEW_ONLY") else ("🧾 TOMORROW'S CARD · %s" if datetime.datetime.now(CT).hour >= 18 else "🧾 TODAY'S CARD · %s")) % datetime.datetime.now(CT).strftime("%a %m/%d %I:%M %p"),
                  "**%d slip%s** below%s.\n\n**🔺 OVERS that qualify (%d)**\n%s\n\n**🔻 UNDERS that qualify (%d)**\n%s"
-                 % (len(slips), "" if len(slips) == 1 else "s", (" · roll $%.2f · stakes: first 3 $%.2f if strong / $%.2f, then $%.2f" % (rl, STAKE * rl, 0.05 * rl, 0.025 * rl)) if rl else "",
+                 % (len(slips), "" if len(slips) == 1 else "s", (" · roll $%.2f · stakes: first 3 $%.2f if STRONG (proj 20%%+ past the line + history backs it) / $%.2f, then $%.2f" % (rl, STAKE * rl, 0.05 * rl, 0.025 * rl)) if rl else "",
                     len(_ov), side(_ov), len(_un), side(_un)))
     for _i, (k_, grp_, ph_, mult_, tag_, fam_) in enumerate(slips):
         for g in grp_:
             g["probation"] = bool(probation(g))
-        _sk = _stake_for(_pos0 + _i, ph_)
-        print("  slip %d of the day: joint %.0f%% -> stake %.1f%%" % (_pos0 + _i + 1, 100 * ph_, 100 * _sk))
+        _sk = _stake_for(_pos0 + _i, grp_)
+        print("  slip %d of the day: %s -> stake %.1f%%" % (_pos0 + _i + 1, "STRONG (every leg 20%+ past the line + history backs it)" if all(_strong_leg(g) for g in grp_) else "regular", 100 * _sk))
         C.post_slip(k_, grp_, ph_, stake=_sk * rl if rl else None, mult=mult_, be=0.55 if mult_ == 6.0 else 0.577)
     _pp = [t for t in paper_slips if sig(t[1]) not in posted]
     if _pp and not os.environ.get("NEW_ONLY"):
