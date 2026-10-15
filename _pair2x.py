@@ -955,7 +955,7 @@ for x in std:
     if _m and _m[1] >= 30 and not x.get("promo"):
         _rate = _m[0] / _m[1] if x["side"] == "over" else 1 - _m[0] / _m[1]
         x["p_model"] = x["p"]
-        x["p"] = round(min(0.80, max(0.40, x["p"] + 0.5 * (_rate - 0.5))), 3)
+        x["p"] = round(min(0.80, max(0.40, x["p"] + 0.3 * (_rate - 0.5))), 3)   # 10/15 out-of-sample: 61% markets ran 53.5% the next week -> ~30% survives
         x["market"] = "%s %s: %s %.0f%% of %d" % (x["sport"], x["stat"], x["side"], 100 * _rate, _m[1])
     if x.get("proj") is not None:
         _pr = float(x["proj"])
@@ -982,9 +982,12 @@ def _probation_ok(tag):
         return True
 _PROB = {t: _probation_ok(t) for t in ("nfl_agree", "nba_role_under", "nba_pre_under")}
 print("probation rules live: %s" % {k: ("HALF-STAKE BET" if v else "back to PAPER") for k, v in _PROB.items()})
-probation = lambda s: any(s.get(t) and _PROB[t] for t in _PROB) and not (
+# 10/15 user: "fuck the paper testing unless it's esports" -> backtested rules bet FULL stake from day 1; the auto-demote (under 57.7% after
+# 20 graded legs -> back to paper) stays, because that is a measured loss, not a test.
+_FULL = lambda s: any(s.get(t) and _PROB[t] for t in _PROB)
+probation = lambda s: False and (
     (s.get("nfl_agree") and NFL_AGREE_LIVE) or (s.get("nba_role_under") and NBA_ROLE_LIVE["under"]) or (s.get("nba_pre_under") and NBAP_LIVE))
-money_ok = lambda s: bool(s.get("qb_out")) or probation(s) or bool(s.get("promo")) or (bool(s.get("beta")) and NFL_BETA_LIVE) or bool(s.get("soccer_hit")) or bool(s.get("nhl_under")) or (bool(s.get("nba_pre_under")) and NBAP_LIVE) or (bool(s.get("nfl_agree")) and NFL_AGREE_LIVE) or (bool(s.get("nba_role_under")) and NBA_ROLE_LIVE["under"]) or (bool(s.get("nba_role_over")) and NBA_ROLE_LIVE["over"]) or (s["sport"] in ("NHL", "WNBA") and not s.get("paper"))
+money_ok = lambda s: bool(s.get("qb_out")) or _FULL(s) or probation(s) or bool(s.get("promo")) or (bool(s.get("beta")) and NFL_BETA_LIVE) or bool(s.get("soccer_hit")) or bool(s.get("nhl_under")) or (bool(s.get("nba_pre_under")) and NBAP_LIVE) or (bool(s.get("nfl_agree")) and NFL_AGREE_LIVE) or (bool(s.get("nba_role_under")) and NBA_ROLE_LIVE["under"]) or (bool(s.get("nba_role_over")) and NBA_ROLE_LIVE["over"]) or (s["sport"] in ("NHL", "WNBA") and not s.get("paper"))
 CRAZY = lambda s: bool(s.get("promo")) or s.get("p_model", s["p"]) >= 0.66 or bool(s.get("qb_out_crazy"))   # 10/15: the model's own p, not the market-nudged one
 by_fam = collections.defaultdict(list)
 for s in sorted(std, key=lambda s: (-s["p"], -s.get("gap", 0))):
@@ -1214,7 +1217,7 @@ try:
         for grp_ in _forced:
             for g in grp_:
                 g["probation"] = bool(probation(g))
-            _half = any(g["probation"] or g.get("qb_out") for g in grp_) or not all(money_ok(g) for g in grp_)
+            _half = not all(money_ok(g) for g in grp_)
             C.post_embed("🚨 FORCED PAIR · crazy line, %s %s %g%s -- locked in with our best partner" % (grp_[0]["player"], grp_[0]["stat"], grp_[0]["line"],
                          " (was %g)" % grp_[0]["was_line"] if grp_[0].get("was_line") is not None else ""),
                          "Partner: **%s** %s %g %s (%.0f%%)%s" % (grp_[1]["player"], "HIGHER" if grp_[1]["side"] == "over" else "LOWER", grp_[1]["line"], grp_[1]["stat"],
@@ -1243,7 +1246,7 @@ try:
                  % (len(slips), "" if len(slips) == 1 else "s", (" · roll $%.2f · stake $%.2f each" % (rl, 0.05 * rl)) if rl else "",
                     len(_ov), side(_ov), len(_un), side(_un)))
     for k_, grp_, ph_, mult_, tag_, fam_ in slips:
-        _half = any(probation(g) or g.get("qb_out") for g in grp_)  # 10/14: any probation leg -> half stake; 10/15: QB-OUT (backtest only) too
+        _half = any(probation(g) for g in grp_)                     # 10/15: no half stakes for backtested rules (user)
         for g in grp_:
             g["probation"] = bool(probation(g))
         C.post_slip(k_, grp_, ph_, stake=(0.025 if _half else 0.05) * rl if rl else None, mult=mult_, be=0.55 if mult_ == 6.0 else 0.577)
