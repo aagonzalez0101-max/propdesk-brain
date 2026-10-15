@@ -98,6 +98,7 @@ def grade(log, part="all"):
         ("golf rounds update", ["_golf.py", "pull", "2026"], 1800),
         ("CFB box scores update", ["_cfb.py", "pull", "2026"], 2400),
         ("grade model calls (all sports)", ["_calls.py", "grade"], 1800),
+        ("HISTORY: grade every archived PP standard line (base rate per market)", ["_history.py", "build"], 1200),
         ("archive: compact to lines.db + gzip raw older than 1 day", ["_archive_compact.py", "1"], 3600),
         ("DIRECTION: rebuild graded lines", ["_direction.py", "build"], 1800),
         ("DIRECTION: grade paper picks", ["_dir_search.py", "grade"], 600),
