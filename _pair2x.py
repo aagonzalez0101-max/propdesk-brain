@@ -988,6 +988,7 @@ _FULL = lambda s: any(s.get(t) and _PROB[t] for t in _PROB)
 probation = lambda s: False and (
     (s.get("nfl_agree") and NFL_AGREE_LIVE) or (s.get("nba_role_under") and NBA_ROLE_LIVE["under"]) or (s.get("nba_pre_under") and NBAP_LIVE))
 money_ok = lambda s: bool(s.get("qb_out")) or _FULL(s) or probation(s) or bool(s.get("promo")) or (bool(s.get("beta")) and NFL_BETA_LIVE) or bool(s.get("soccer_hit")) or bool(s.get("nhl_under")) or (bool(s.get("nba_pre_under")) and NBAP_LIVE) or (bool(s.get("nfl_agree")) and NFL_AGREE_LIVE) or (bool(s.get("nba_role_under")) and NBA_ROLE_LIVE["under"]) or (bool(s.get("nba_role_over")) and NBA_ROLE_LIVE["over"]) or (s["sport"] in ("NHL", "WNBA") and not s.get("paper"))
+MAX_SLIPS, STAKE = 3, 0.065                                       # 10/15 user: best 3 a day, bet with confidence (6.5% = inside the ~6-7% ceiling)
 CRAZY = lambda s: bool(s.get("promo")) or s.get("p_model", s["p"]) >= 0.66 or bool(s.get("qb_out_crazy"))   # 10/15: the model's own p, not the market-nudged one
 by_fam = collections.defaultdict(list)
 for s in sorted(std, key=lambda s: (-s["p"], -s.get("gap", 0))):
@@ -1160,10 +1161,13 @@ try:
     _bets = sum(1 for x in open("live_paper.jsonl", encoding="utf-8") if x.strip() and json.loads(x).get("kind") == "LIVE"
                 and (json.loads(x).get("game_date") or json.loads(x).get("date")) == _today)
     _cards = sum(1 for x in open("_slips_posted.jsonl", encoding="utf-8") if x.strip() and json.loads(x).get("posted", "")[:10] == _today)         if os.path.exists("_slips_posted.jsonl") else 0
-    room = max(0, 5 - max(_bets, _cards))
+    # 10/15 user ("of the 300+ lines we only bet a few -- choose the best ones and bet them with confidence"): BEST 3 slips a day at a
+    # bigger stake. Backtest (107 graded legs, 1,000 tie orders): top-ranked legs hit 77%, legs 5-10 56% (below the 57.7% b/e);
+    # best 3 x 6.5-7.5% beat 5 x 5% (median $102 vs $87 from $40, same downside). Ranked by joint p (model + market prior).
+    room = max(0, MAX_SLIPS - max(_bets, _cards))
     fresh = sorted(fresh, key=lambda t: -t[2])[:room]
     if room == 0:
-        print("daily cap reached (5 bets/slips today) -- nothing new posted")
+        print("daily cap reached (%d best slips today) -- nothing new posted" % MAX_SLIPS)
     print("slips: %d qualify, %d new" % (len(slips), len(fresh)))
     # 10/14 user ("how tf did we not flag Allgeier 4.5 rush atts"): Allgeier O4.5 rush att passed NFL AGREE (avg 7.6, role 5.7) but the NFL
     # slip was already posted (BTJ/Raridon), so he had no fresh partner and never surfaced; PP moved it to 6.5 within minutes. A BET-eligible
@@ -1222,7 +1226,7 @@ try:
                          " (was %g)" % grp_[0]["was_line"] if grp_[0].get("was_line") is not None else ""),
                          "Partner: **%s** %s %g %s (%.0f%%)%s" % (grp_[1]["player"], "HIGHER" if grp_[1]["side"] == "over" else "LOWER", grp_[1]["line"], grp_[1]["stat"],
                                                                    100 * grp_[1]["p"], "" if money_ok(grp_[1]) else " -- paper-tier partner, half stake"), 0xFF3B3B)
-            C.post_slip(99, grp_, grp_[0]["p"] * grp_[1]["p"], stake=(0.025 if _half else 0.05) * rl if rl else None, mult=3.0, be=0.577)
+            C.post_slip(99, grp_, grp_[0]["p"] * grp_[1]["p"], stake=(STAKE / 2 if _half else STAKE) * rl if rl else None, mult=3.0, be=0.577)
             print("FORCED PAIR posted:", " / ".join(g["player"] for g in grp_))
         _solo = [x for x in _solo if not any(x is g for t in _forced for g in t)]
         if _forced:
@@ -1243,13 +1247,13 @@ try:
     _h = datetime.datetime.now(CT).hour
     C.post_embed((("🌙 OVERNIGHT EDGE · %s" if (_h >= 23 or _h < 7) else "🆕 NEW LINES · %s") if os.environ.get("NEW_ONLY") else ("🧾 TOMORROW'S CARD · %s" if datetime.datetime.now(CT).hour >= 18 else "🧾 TODAY'S CARD · %s")) % datetime.datetime.now(CT).strftime("%a %m/%d %I:%M %p"),
                  "**%d slip%s** below%s.\n\n**🔺 OVERS that qualify (%d)**\n%s\n\n**🔻 UNDERS that qualify (%d)**\n%s"
-                 % (len(slips), "" if len(slips) == 1 else "s", (" · roll $%.2f · stake $%.2f each" % (rl, 0.05 * rl)) if rl else "",
+                 % (len(slips), "" if len(slips) == 1 else "s", (" · roll $%.2f · stake $%.2f each (best %d a day)" % (rl, STAKE * rl, MAX_SLIPS)) if rl else "",
                     len(_ov), side(_ov), len(_un), side(_un)))
     for k_, grp_, ph_, mult_, tag_, fam_ in slips:
         _half = any(probation(g) for g in grp_)                     # 10/15: no half stakes for backtested rules (user)
         for g in grp_:
             g["probation"] = bool(probation(g))
-        C.post_slip(k_, grp_, ph_, stake=(0.025 if _half else 0.05) * rl if rl else None, mult=mult_, be=0.55 if mult_ == 6.0 else 0.577)
+        C.post_slip(k_, grp_, ph_, stake=(STAKE / 2 if _half else STAKE) * rl if rl else None, mult=mult_, be=0.55 if mult_ == 6.0 else 0.577)
     _pp = [t for t in paper_slips if sig(t[1]) not in posted]
     if _pp and not os.environ.get("NEW_ONLY"):
         C.post_embed("📝 PAPER SLIPS · not bets -- tracked to build each league's record", chr(10).join(
