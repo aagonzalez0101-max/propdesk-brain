@@ -3,7 +3,8 @@
 
 Each minute it checks what is due (Central time) and has not run yet; after every task it uploads the data bundle so the next run
 (and the laptop) start from the newest ledgers.
-    06:30  grade      python _daily.py grade      results -> sports.db, every ledger graded, post-mortem
+    00:45  grade_sports  python _daily.py grade_sports  results -> sports.db, every sports ledger graded, post-mortem (10/14)
+    06:30  grade         python _daily.py grade_es      esports pulls + grading, slips, tracker, scorecard
     07:45  lines AM   python _daily.py lines      boards, screens, direction picks, THE CARD -> Discord #card (~8:20)
     10:00  last call  picks + CS2/Dota projections + card    final check before the 11 AM games lock
     15:00  lines mid  picks + CS2/Dota projections + card    new lines for TONIGHT's games (the 9 PM card is tomorrow's)
@@ -23,7 +24,10 @@ except Exception:
 DONE_F = "_brain_done.json"
 # (name, CT slot, commands, hard timeout s, typical runtime s -- the laptop measured grade ~63 min, lines ~35 min)
 # 10/10 user: "games start at 11 AM" -> the morning card must be out by ~8:15, with a last pre-11 AM check. Night games get a 3 PM pass.
-DAILY = [("grade", (6, 30), [["_daily.py", "grade"]], 7200, 4200),
+# 10/14 user: "grading around 12am for sports, esports around normal time" -> sports grade right after the last West-coast games
+# (~12:45 AM; the late tip ends ~midnight), esports + the scorecard keep the 6:30 AM slot (EU/Asia maps finish overnight).
+DAILY = [("grade_sports", (0, 45), [["_daily.py", "grade_sports"]], 7200, 3600),
+         ("grade", (6, 30), [["_daily.py", "grade_es"]], 7200, 2400),
          ("lines_am", (7, 45), [["_daily.py", "lines"]], 5400, 2400),
          ("lines_10", (10, 0), [["_dir_search.py", "score"], ["_cs2_live.py", "card"], ["_dota_proj.py"], ["_pair2x.py"]], 3000, 900),
          ("lines_mid", (15, 0), [["_dir_search.py", "score"], ["_cs2_live.py", "card"], ["_dota_proj.py"], ["_pair2x.py"]], 3600, 1200),

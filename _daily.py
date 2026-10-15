@@ -88,7 +88,11 @@ def lines(day, log):
         run(label, args, to, log)
 
 
-def grade(log):
+ES_KEYS = ("CS2", "Valorant", "Dota", "LoL", "esports")                       # esports steps -> the 6:30 AM grade
+SHARED_KEYS = ("SLIPS", "model calls", "tracker", "yesterday's card", "recalibrate probabilities", "projection vs actual")   # both runs (idempotent)
+
+
+def grade(log, part="all"):
     steps = [
         ("sports.db update (results)", ["_db.py", "update"], 3600),
         ("golf rounds update", ["_golf.py", "pull", "2026"], 1800),
@@ -146,5 +150,9 @@ if __name__ == "__main__":
         print("DAILY %s %s" % (mode.upper(), stamp))
         if mode in ("grade", "all"):
             grade(log)
+        elif mode == "grade_sports":
+            grade(log, "sports")
+        elif mode == "grade_es":
+            grade(log, "es")
         if mode in ("lines", "all"):
             lines(day, log)
