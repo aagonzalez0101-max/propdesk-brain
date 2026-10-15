@@ -554,6 +554,70 @@ try:
 except Exception as e:
     print("nfl agree:", e)
 
+# 10/15 user ("Jalen Hurts officially ruled out ... push crazy PHI legs, people are gonna be slow to switch, especially PP"): QB-OUT rule.
+# Measured on 2025 nflverse, every game a team's starting QB sat: TE receiving yards ran 0.58x their average (under 95%-of-avg 70%,
+# n=97), WR receiving yards 0.80x (59%, n=183); RB carries did NOT rise (0.90x) -> no RB overs. So: when the team's starting QB
+# (most 2026 pass attempts) is Out/Doubtful/IR on ESPN, its TE receiving-yards UNDER is a CRAZY leg if PP still has the line at 80%+ of
+# his average (PP hasn't priced the backup in); its WR receiving-yards UNDER qualifies (59%) at 90%+ and is CRAZY only if PP didn't cut it at all.
+try:
+    import requests as _rq3, collections as _co3
+    _qbout = {}
+    for _t in _rq3.get("https://site.api.espn.com/apis/site/v2/sports/football/nfl/injuries", timeout=30).json().get("injuries", []):
+        for _i in _t.get("injuries", []):
+            _a = _i.get("athlete") or {}
+            if (_a.get("position") or {}).get("abbreviation") == "QB" and (_i.get("status") or "") in ("Out", "Doubtful", "Injured Reserve"):
+                _qbout[_a.get("displayName")] = 1
+    _att = _co3.defaultdict(float)
+    for _r in _NR.W26:
+        if _r.get("position") == "QB":
+            _att[(_r.get("recent_team") or _r.get("team"), _r["player_display_name"])] += float(_r.get("attempts") or 0)
+    _starter = {}
+    for (_tm, _pl), _a in _att.items():
+        if _a > _starter.get(_tm, ("", 0))[1]:
+            _starter[_tm] = (_pl, _a)
+    _QBOUT_TEAMS = {_tm for _tm, (_pl, _a) in _starter.items() if _pl in _qbout}
+    _QBOUT_TEAMS |= {{"JAX": "JAC", "LA": "LAR", "WAS": "WSH"}.get(t_, t_) for t_ in _QBOUT_TEAMS}
+    print("QB OUT teams:", sorted(_QBOUT_TEAMS), {t_: _starter[t_][0] for t_ in _starter if t_ in _QBOUT_TEAMS})
+    _pos = {}
+    for _r in _NR.W26:
+        _pos[_r["player_display_name"]] = _r.get("position")
+    _n_qb = 0
+    for (sp, pl), l in [((k_[0], k_[1]), v_) for k_, v_ in live.items()]:
+        if sp != "NFL" or l.get("kind") != "standard" or l["stat"] != "Receiving Yards" or l.get("team") not in _QBOUT_TEAMS:
+            continue
+        if datetime.datetime.fromisoformat(l["start"]).astimezone(datetime.timezone.utc) < now:
+            continue
+        _ps = _pos.get(l["player"])
+        if _ps not in ("TE", "WR"):
+            continue
+        _wk = 1 + (datetime.datetime.fromisoformat(l["start"]).astimezone(CT).date() - datetime.date(2026, 9, 8)).days // 7
+        _avg = _NR.raw_avg(l["player"], l["stat"], _wk)
+        if not _avg or _avg < 15:
+            continue
+        _ratio = l["line"] / _avg
+        if _ps == "TE" and _ratio >= 0.80:
+            _p, _crazy = 0.70, True
+        elif _ps == "WR" and _ratio >= 0.90:
+            _p, _crazy = 0.59, _ratio >= 1.0
+        else:
+            continue
+        std.append(dict(sport="NFL", qb_out=True, qb_out_crazy=_crazy, player=l["player"], team=l.get("team"), opp=l.get("opp"), stat=l["stat"],
+                        line=l["line"], side="under", p=_p, start=l["start"], gap=round(_ratio - 1, 3),
+                        why="QB OUT (%s): backup-QB games 2025 -- %s receiving yards ran %s of average (%s under). His avg %.1f vs line %g (PP at %.0f%% of his avg)"
+                            % (_starter.get(l.get("team"), _starter.get({"JAC": "JAX", "LAR": "LA", "WSH": "WAS"}.get(l.get("team"), ""), ("?",)))[0], _ps,
+                               "0.58x" if _ps == "TE" else "0.80x", "70%" if _ps == "TE" else "59%", _avg, l["line"], 100 * _ratio)))
+        _n_qb += 1
+    print("QB OUT legs: %d" % _n_qb)
+    # the same data says a backup QB cuts every pass-catcher -> drop that team's receiving OVERS already on the card (Egbuka/Godwin O
+    # with Mayfield doubtful, 10/15)
+    _drop = [x for x in std if x.get("sport") == "NFL" and x.get("team") in _QBOUT_TEAMS and x.get("side") == "over"
+             and x.get("stat") in ("Receiving Yards", "Receptions", "Rush+Rec Yds", "Fantasy Score")]
+    for x in _drop:
+        print("  QB OUT blocks: %s O%g %s (%s)" % (x["player"], x["line"], x["stat"], x.get("team")))
+    std[:] = [x for x in std if not any(x is d_ for d_ in _drop)]
+except Exception as e:
+    print("qb out:", e)
+
 # 10/13 user ("do NBA then"): NBA ROLE UNDERS. Basketball backtest: own average AND minutes model agreeing was 44-50% overall, but
 # agreeing on the UNDER (both 10%+ under the line) went WNBA 27-11 (71%), NBA preseason 3-0 -- our basketball numbers run hot on
 # overs. Regular-season NBA (league 7) only. PAPER until 30 forward legs at 60%+, then BET by itself (nba_role_paper.jsonl).
@@ -849,8 +913,8 @@ _PROB = {t: _probation_ok(t) for t in ("nfl_agree", "nba_role_under", "nba_pre_u
 print("probation rules live: %s" % {k: ("HALF-STAKE BET" if v else "back to PAPER") for k, v in _PROB.items()})
 probation = lambda s: any(s.get(t) and _PROB[t] for t in _PROB) and not (
     (s.get("nfl_agree") and NFL_AGREE_LIVE) or (s.get("nba_role_under") and NBA_ROLE_LIVE["under"]) or (s.get("nba_pre_under") and NBAP_LIVE))
-money_ok = lambda s: probation(s) or bool(s.get("promo")) or (bool(s.get("beta")) and NFL_BETA_LIVE) or bool(s.get("soccer_hit")) or bool(s.get("nhl_under")) or (bool(s.get("nba_pre_under")) and NBAP_LIVE) or (bool(s.get("nfl_agree")) and NFL_AGREE_LIVE) or (bool(s.get("nba_role_under")) and NBA_ROLE_LIVE["under"]) or (bool(s.get("nba_role_over")) and NBA_ROLE_LIVE["over"]) or (s["sport"] in ("NHL", "WNBA") and not s.get("paper"))
-CRAZY = lambda s: bool(s.get("promo")) or s["p"] >= 0.66
+money_ok = lambda s: bool(s.get("qb_out")) or probation(s) or bool(s.get("promo")) or (bool(s.get("beta")) and NFL_BETA_LIVE) or bool(s.get("soccer_hit")) or bool(s.get("nhl_under")) or (bool(s.get("nba_pre_under")) and NBAP_LIVE) or (bool(s.get("nfl_agree")) and NFL_AGREE_LIVE) or (bool(s.get("nba_role_under")) and NBA_ROLE_LIVE["under"]) or (bool(s.get("nba_role_over")) and NBA_ROLE_LIVE["over"]) or (s["sport"] in ("NHL", "WNBA") and not s.get("paper"))
+CRAZY = lambda s: bool(s.get("promo")) or s["p"] >= 0.66 or bool(s.get("qb_out_crazy"))
 by_fam = collections.defaultdict(list)
 for s in sorted(std, key=lambda s: (-s["p"], -s.get("gap", 0))):
     by_fam[FAM(s)].append(s)
@@ -1079,7 +1143,7 @@ try:
         for grp_ in _forced:
             for g in grp_:
                 g["probation"] = bool(probation(g))
-            _half = any(g["probation"] for g in grp_) or not all(money_ok(g) for g in grp_)
+            _half = any(g["probation"] or g.get("qb_out") for g in grp_) or not all(money_ok(g) for g in grp_)
             C.post_embed("🚨 FORCED PAIR · crazy line, %s %s %g%s -- locked in with our best partner" % (grp_[0]["player"], grp_[0]["stat"], grp_[0]["line"],
                          " (was %g)" % grp_[0]["was_line"] if grp_[0].get("was_line") is not None else ""),
                          "Partner: **%s** %s %g %s (%.0f%%)%s" % (grp_[1]["player"], "HIGHER" if grp_[1]["side"] == "over" else "LOWER", grp_[1]["line"], grp_[1]["stat"],
@@ -1108,7 +1172,7 @@ try:
                  % (len(slips), "" if len(slips) == 1 else "s", (" · roll $%.2f · stake $%.2f each" % (rl, 0.05 * rl)) if rl else "",
                     len(_ov), side(_ov), len(_un), side(_un)))
     for k_, grp_, ph_, mult_, tag_, fam_ in slips:
-        _half = any(probation(g) for g in grp_)                     # 10/14: any probation leg -> half stake, marked on the card
+        _half = any(probation(g) or g.get("qb_out") for g in grp_)  # 10/14: any probation leg -> half stake; 10/15: QB-OUT (backtest only) too
         for g in grp_:
             g["probation"] = bool(probation(g))
         C.post_slip(k_, grp_, ph_, stake=(0.025 if _half else 0.05) * rl if rl else None, mult=mult_, be=0.55 if mult_ == 6.0 else 0.577)
