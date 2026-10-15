@@ -379,15 +379,17 @@ def post_slip(k, grp, ph, stake=None, mult=6.0, be=0.55):
     time.sleep(1)
 
 
-def roll():
-    """today's roll for the 5% stake: road.json start + graded net since start (same as _road.py)"""
+def roll(book="PrizePicks"):
+    """today's roll for the 5% stake, PER BOOK (10/14 user: "we gotta keep the stakes separate").
+    PrizePicks = road.json start_roll + PrizePicks nets; any other book = its deposits + that book's nets. book=None -> combined."""
     try:
         R = json.load(open("road.json", encoding="utf-8"))
         L = [json.loads(x) for x in open("live_paper.jsonl", encoding="utf-8") if x.strip()]
         today = datetime.datetime.now(CT).date().isoformat()          # user 10/11: stake = 5% of the MORNING roll, fixed all day
-        dep = sum(d["amount"] for d in R.get("deposits", []) if d["date"] <= today)      # 10/14: DraftKings cash joins the roll (one roll, two wallets)
-        return R["start_roll"] + dep + sum(r.get("net") or 0 for r in L if r.get("kind") == "LIVE" and R["start_date"] <= r.get("date", "") < today
-                                     and not r.get("exclude") and r.get("result") in ("WIN", "LOSS", "PUSH", "VOID"))
+        mine = lambda b: book is None or (b or "PrizePicks") == book
+        base = (R["start_roll"] if book in (None, "PrizePicks") else 0) + sum(d["amount"] for d in R.get("deposits", []) if d["date"] <= today and mine(d.get("book")))
+        return base + sum(r.get("net") or 0 for r in L if r.get("kind") == "LIVE" and R["start_date"] <= r.get("date", "") < today and mine(r.get("book"))
+                          and not r.get("exclude") and r.get("result") in ("WIN", "LOSS", "PUSH", "VOID"))
     except Exception:
         return None
 
