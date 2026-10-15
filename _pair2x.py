@@ -7,7 +7,7 @@ best goblin you decide -- that's how we get the 2x's").
   value        = p_std x p_gob x payout - 1; bet only if the app's payout >= 1 / (p_std x p_gob) + ~5% cushion.
     python _pair2x.py
 """
-import json, datetime, os, subprocess, sys, collections
+import json, datetime, os, re, subprocess, sys, collections
 import _props as P, _mismatch as M
 
 try:                                                    # 10/10 user: everything in Texas time (Central, DST-aware)
@@ -374,8 +374,9 @@ try:
                 _a0 = _BBq.roster("nba").get(M.norm(lv["player"]))
                 _all0 = [g_ for g_ in (_BBq.logs("nba", _a0[0]) if _a0 else []) if not g_.get("pre")]
                 _reg = [g_ for g_ in _all0 if g_.get("season") == 2026] or [g_ for g_ in _all0 if g_.get("season") == max((x["season"] for x in _all0), default=0)]   # Haliburton missed 2025-26
-                if _reg and sum(g_["min"] for g_ in _reg) / len(_reg) >= 25:
-                    print("  preseason under blocked (late-preseason dress rehearsal, starter): %s %s" % (lv["player"], lv["stat"])); continue
+                # 10/15 audit: Lopez (bench, 11 mpg) 9 pts in 8 min, Dybantsa/Boozer rookies at 23.7/17 mpg slipped the 25-mpg cut ->
+                # in a team's last 2 preseason games rotations are unpredictable for EVERYONE: no preseason unders there at all
+                print("  preseason under blocked (late preseason, any role): %s %s" % (lv["player"], lv["stat"])); continue
         except Exception as e:
             print("presched:", e)
         _pj = r.get("adj_mean") or r.get("proj")
@@ -420,8 +421,8 @@ try:
         _mpg = sum(g_["min"] for g_ in _regl) / len(_regl) if _regl else 0
         _mpg = max(_mpg, sum(_mins) / len(_mins) * (25 / 24))     # 10/14: rookies (Caleb Wilson 29-32 min) have no last season -> preseason 24+ min = starter
         _dayx = _stx.astimezone(CT).date().isoformat()
-        if _mpg >= 25 and _PSx.late_preseason(l.get("team"), _dayx):
-            print("  preseason box under blocked (starter, late preseason): %s %s" % (l["player"], l["stat"])); continue
+        if _PSx.late_preseason(l.get("team"), _dayx):            # 10/15 audit: any role (see above)
+            print("  preseason box under blocked (late preseason, any role): %s %s" % (l["player"], l["stat"])); continue
         std.append(dict(sport="NBAP", nba_pre_under=True, paper=not NBAP_LIVE, player=l["player"], team=l.get("team"), opp=l.get("opp"), stat=l["stat"],
                         line=l["line"], side="under", p=0.68, start=l["start"],
                         why="Preseason box scan: %s in %s min this preseason (all under %s), proj %.1f; last-season %.0f mpg%s" % (
@@ -896,6 +897,33 @@ def _beta_live():
     except Exception as e:
         print("beta switch:", e); return False
 NFL_BETA_LIVE = _beta_live()
+# 10/15 user ("would you have made those picks? ... we need shi with the research qualities as Claude"): RESEARCH GATE = the checks run by
+# hand on every leg before naming it. Audit of the 19 cloud slips 10/10-10/15: legs these checks reject went 0-3 (Podkolzin, Kent Johnson,
+# Lopez), legs they keep went 8-2. Applied last, to every leg, BET or paper:
+#   1. tiny lines are noise, not edge: NFL receiving/rush yards <= 5.5, receptions/targets/rush attempts <= 1.5 (Hampton O3.5, Arroyo O3.5)
+#   2. club keeper passes: his OWN starts must go our way at least half the time (Rossi U26.5: 6 of 15)
+def _research_ok(x):
+    if x.get("promo"):
+        return True, ""
+    if x.get("sport") == "NFL":
+        if x["stat"] in ("Receiving Yards", "Rush Yards") and x["line"] <= 5.5:
+            return False, "tiny line %g" % x["line"]
+        if x["stat"] in ("Receptions", "Rec Targets", "Rush Attempts") and x["line"] <= 1.5:
+            return False, "tiny line %g" % x["line"]
+    if x.get("soccer_hit"):
+        m_ = re.search(r"(\d+) of (\d+) starts", x.get("why", ""))
+        if m_ and int(m_.group(2)) >= 6 and int(m_.group(1)) / int(m_.group(2)) < 0.5:
+            return False, "own starts %s of %s" % (m_.group(1), m_.group(2))
+    return True, ""
+_kept_rg = []
+for x in std:
+    ok_, why_ = _research_ok(x)
+    if ok_:
+        _kept_rg.append(x)
+    else:
+        print("  RESEARCH GATE drops %s %s %g %s -- %s" % (x["player"], x["side"], x["line"], x["stat"], why_))
+std = _kept_rg
+
 # 10/14 user ("make shit bettable asap and fix as we go"): PROBATION tier -- a rule with a positive backtest but no forward proof yet bets at
 # HALF stake (2.5% of the roll) from day one: NFL AGREE (60% backtest), NBA preseason unders (TAKE 21-2), NBA ROLE UNDERS (WNBA 71%).
 # Full stake once its own switch flips; a probation rule under break-even after 20 graded legs goes back to paper (_probation_ok).
