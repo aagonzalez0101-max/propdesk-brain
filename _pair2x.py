@@ -1061,7 +1061,16 @@ try:
         # line) gets the best partner we have: a fresh BET-eligible leg first, else a BET-eligible leg already on a posted slip, else any
         # 60%+ leg -- different team and game. Posted as a real 2-pick (half stake if either leg is probation), outside the 5-a-day cap.
         _forced = []
-        for x in _solo:
+        # 10/14 user: "just put both crazy legs together" -- crazy legs pair with EACH OTHER first (different teams; same game allowed,
+        # e.g. Hill BAL + Watson CLE -- opposing-side legs measured independent); only a leftover crazy leg gets a regular partner.
+        _left = sorted(_solo, key=lambda y: y.get("was_line") is None)        # line-pull legs pair with each other before p-only crazies
+        while len(_left) >= 2:
+            a_ = _left.pop(0)
+            b_ = next((y for y in _left if y["team"] != a_["team"]), None)
+            if not b_:
+                break
+            _left.remove(b_); _forced.append([a_, b_])
+        for x in _left:
             _ok = lambda y: y is not x and y["team"] != x["team"] and {y["team"], y.get("opp")} != {x["team"], x.get("opp")} and y.get("kind", "standard") == "standard"                 and all(y is not g for t in _forced for g in t)
             _pool = sorted([y for y in std if _ok(y)], key=lambda y: (-y["p"], -y.get("gap", 0)))
             _mate = next((y for y in _pool if money_ok(y) and (y["player"], (y.get("start") or "")[:10]) not in _inslip), None)                 or next((y for y in _pool if money_ok(y)), None) or next((y for y in _pool if y["p"] >= 0.60), None)
@@ -1077,9 +1086,9 @@ try:
                                                                    100 * grp_[1]["p"], "" if money_ok(grp_[1]) else " -- paper-tier partner, half stake"), 0xFF3B3B)
             C.post_slip(99, grp_, grp_[0]["p"] * grp_[1]["p"], stake=(0.025 if _half else 0.05) * rl if rl else None, mult=3.0, be=0.577)
             print("FORCED PAIR posted:", " / ".join(g["player"] for g in grp_))
-        _solo = [x for x in _solo if not any(x is t[0] for t in _forced)]
+        _solo = [x for x in _solo if not any(x is g for t in _forced for g in t)]
         if _forced:
-            _sa |= {"%s|%s|%s|%s" % (t[0]["player"], t[0]["stat"], t[0]["line"], t[0]["side"]) for t in _forced}
+            _sa |= {"%s|%s|%s|%s" % (g["player"], g["stat"], g["line"], g["side"]) for t in _forced for g in t if g.get("was_line") is not None or CRAZY(g)}
             json.dump(sorted(_sa), open(_SF, "w", encoding="utf-8"))
         if _solo:
             C.post_embed("⚡ SOLO LEG · qualifies, no fresh partner -- pair it or play it now", chr(10).join(
