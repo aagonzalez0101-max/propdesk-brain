@@ -27,7 +27,7 @@ DONE_F = "_brain_done.json"
 # 10/14 user: "grading around 12am for sports, esports around normal time" -> sports grade right after the last West-coast games
 # (~12:45 AM; the late tip ends ~midnight), esports + the scorecard keep the 6:30 AM slot (EU/Asia maps finish overnight).
 DAILY = [("grade_sports", (0, 45), [["_daily.py", "grade_sports"]], 7200, 3600),
-         ("grade", (6, 30), [["_daily.py", "grade_es"]], 7200, 2400),
+         ("grade", (6, 30), [["_daily.py", "grade_es"]], 7200, 4200),
          ("lines_am", (7, 45), [["_daily.py", "lines"]], 5400, 2400),
          ("lines_10", (10, 0), [["_dir_search.py", "score"], ["_cs2_live.py", "card"], ["_dota_proj.py"], ["_pair2x.py"]], 3000, 900),
          ("lines_mid", (15, 0), [["_dir_search.py", "score"], ["_cs2_live.py", "card"], ["_dota_proj.py"], ["_pair2x.py"]], 3600, 1200),
