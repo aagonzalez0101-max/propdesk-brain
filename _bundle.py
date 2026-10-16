@@ -11,7 +11,7 @@ IN:  every data file in this folder + small data folders + TODAY's raw PP/sharp 
 OUT: code (git), secrets (.env, notify.json), logs, the old raw archive, legacy data/, backtest-only caches (_euro, _nbl), and the
      big refetchable caches (_fotmob, _img_cache, _site_cache) -- the cloud keeps those in its own Actions cache.
 """
-import os, sys, json, tarfile, datetime, subprocess, urllib.request, urllib.error
+import time, os, sys, json, tarfile, datetime, subprocess, urllib.request, urllib.error
 
 REPO = "aagonzalez0101-max/propdesk-brain"
 TAG, ASSET = "data", "bundle.tar.gz"
@@ -224,9 +224,12 @@ def push(force=False, cloud=False, _retry=True):
     except urllib.error.HTTPError as e:                          # 422 = the other side re-uploaded the asset in the same moment
         print("upload rejected (%s)" % e.code); res = None
     os.remove(bp)
-    if not res and _retry:                                       # the other side uploaded at the same moment -> merge again once
+    if not res and _retry:                                       # the other side uploaded at the same moment -> merge again
         print("upload collided -- retrying with a fresh merge")
-        return push(force, cloud, _retry=False)
+        time.sleep(30 if _retry is True else 60)
+        return push(force, cloud, _retry=(2 if _retry is True else False))
+    if not res:                                                  # 10/16: crashed with "NoneType not subscriptable" after 2 collisions
+        raise SystemExit("upload failed after retries -- run the push again in a minute")
     json.dump({"pulled_updated": res["updated_at"]}, open(STATE, "w"))
     print("pushed bundle (%s)" % res["updated_at"])
 
