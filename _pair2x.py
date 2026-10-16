@@ -935,6 +935,26 @@ def _research_ok(x):
             _pw = [int(r_["week"]) for r_ in _NR.W26 if _NR.norm(r_["player_display_name"]) == _NR.norm(x["player"]) and int(r_["week"]) < _wk_]
             if _pw and _wk_ - max(_pw) >= 4:
                 return False, "last played week %d (now week %d)" % (max(_pw), _wk_)
+            # 10/16 audit of the Raridon / Mason Taylor / Jonnu Smith slips -- the average said over, the games didn't:
+            #  4. GAME BY GAME: his 2026 games must clear THIS line on our side at least 60% of the time (3+ games) --
+            #     Raridon averaged 25 vs 12.5 off one 57-yard game, but went over in 2 of 4
+            _G6 = sorted([r_ for r_ in _NR.W26 if _NR.norm(r_["player_display_name"]) == _NR.norm(x["player"]) and int(r_["week"]) < _wk_],
+                         key=lambda r_: int(r_["week"]))
+            if x["stat"] in _NR.STATS and len(_G6) >= 3:
+                _vk, _gp, _ek = _NR.STATS[x["stat"]]
+                _vals = [_NR.f(r_, _ek or _vk) for r_ in _G6]
+                _ok = sum((v_ > x["line"]) if x["side"] == "over" else (v_ < x["line"]) for v_ in _vals)
+                if _ok / len(_vals) < 0.60:
+                    return False, "his 2026 games clear %g only %d of %d" % (x["line"], _ok, len(_vals))
+            #  5. back from an absence: missed 2+ of the last 3 weeks (Mason Taylor: weeks 2-4 out, back week 5) -- role not settled
+            _recent = {w_ for w_ in _pw if w_ >= _wk_ - 3}
+            if _pw and len(_recent) <= 1 and _wk_ - 1 in _pw and len(_pw) >= 1 and _wk_ >= 4:
+                return False, "back from missing %d of the last 3 weeks" % (3 - len(_recent))
+            #  6. changed teams: his 2026 games were for another team than the one PP lists now (Jonnu Smith) -- the history is a different role
+            _tms = [(r_.get("recent_team") or r_.get("team")) for r_ in _G6]
+            _FXT = {"JAX": "JAC", "LA": "LAR", "WAS": "WSH"}
+            if _tms and x.get("team") and _FXT.get(_tms[-1], _tms[-1]) != _FXT.get(x["team"], x["team"]) and _tms[-1] != x["team"]:
+                return False, "his 2026 games were for %s, PP lists %s" % (_tms[-1], x["team"])
         except Exception:
             pass
     if x.get("soccer_hit"):
