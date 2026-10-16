@@ -1172,7 +1172,7 @@ try:
     sig = lambda grp_: "|".join(sorted("%s/%s/%s/%s" % (g["player"], g["stat"], g["line"], g["side"]) for g in grp_))
     posted, posted_players = set(), set()
     if os.path.exists("_slips_posted.jsonl"):
-        cut = (datetime.datetime.now(CT) - datetime.timedelta(days=2)).isoformat()
+        cut = (datetime.datetime.now(CT) - datetime.timedelta(days=7)).isoformat()   # 10/16: 2 days let Raridon (posted Wed for Sun) get re-posted Fri -- NFL slips post days early
         for x in open("_slips_posted.jsonl", encoding="utf-8"):
             if x.strip():
                 rr = json.loads(x)
