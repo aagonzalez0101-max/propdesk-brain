@@ -73,28 +73,41 @@ if os.path.exists("direction_paper.jsonl"):
 seen_cs = set()
 # 10/11: with 874 graded band legs the CS2 band hits 52.7% -- BELOW the 55% a 3-pick needs (the 56.8% was a smaller sample).
 # CS2 is PAPER: still projected, logged and graded by _cs2_live / _cs2_grade, but not carded for money unless CS2_LIVE=1.
+# 10/16 user ("we'll only really use 1-2 lines from any esport -- choose the best of the best"): CS2 POTD. Backtest, 1,801 graded
+# standard CS2 legs over 29 days: the ONE leg a day with the biggest projection gap (model mean vs line) went 19-10 (65.5%, halves 71/60);
+# the 2nd leg drops it to ~55%, and the old edge 3-9% band went 43-45% as a top pick. So: one CS2 leg a day, biggest gap, PP line at
+# least as good as the one priced. Esports stays PAPER (user 10/15) until CS2_LIVE=1; logged to cs2_potd.jsonl and graded nightly.
 if os.path.exists("cs2_paper.jsonl"):
+    _cands = {}
     for x in open("cs2_paper.jsonl", encoding="utf-8"):
         r = json.loads(x)
-        e = r.get("edge") or 0
-        if not (0.03 <= e <= 0.09) or str(r.get("start", ""))[:10] < today or r.get("maps") != 2:
+        if str(r.get("start", ""))[:10] < today or r.get("maps") != 2 or r.get("mult") not in (None, 1.0) or not r.get("model_mu"):
             continue
         if datetime.datetime.fromisoformat(r["start"].replace("Z", "+00:00")) < now or M.norm(r["player"]) in USED:
             continue
         stat = "MAPS 1-2 Headshots" if r.get("kind") == "hs" else "MAPS 1-2 Kills"
         l = live.get(("CS2", M.norm(r["player"]), M.norm(stat)))
         side = "over" if r.get("side") == "higher" else "under"
-        if not l or (side == "over" and l["line"] > r["line"]) or (side == "under" and l["line"] < r["line"]):
+        if not l or l.get("kind", "standard") != "standard" or (side == "over" and l["line"] > r["line"]) or (side == "under" and l["line"] < r["line"]):
             continue                                                   # PP number must be as good as the one the model priced
-        k = (r["player"], stat)
-        if k in seen_cs:
+        g_ = (r["model_mu"] - l["line"]) / l["line"] * (1 if side == "over" else -1)
+        if g_ <= 0:
             continue
-        seen_cs.add(k)
-        coin = 0.45 <= (r.get("map_winp") or 0.5) <= 0.55
-        pc = __import__("_calib_es").cal("cs2", r.get("model_p"))   # 10/10: calibrated -- CS2 calls really hit ~56%, not 62-68%
-        std.append(dict(sport="CS2", paper=os.environ.get("CS2_LIVE") != "1", player=r["player"], team=r.get("team"), opp=r.get("opp"), stat=stat, line=l["line"], side=side,
-                        p=round(pc or 0.56, 3), why="CS2 rule: edge %.1f%%%s, model %.0f%% -> real ~%.0f%%" % (100 * e, "" if coin else ", lopsided map", 100 * (r.get("model_p") or 0), 100 * (pc or 0.56)),
-                        start=l["start"], img=l.get("img")))
+        _cands[(r["player"], stat)] = (g_, r, l, stat, side)
+    for g_, r, l, stat, side in sorted(_cands.values(), key=lambda t: -t[0])[:1]:
+        std.append(dict(sport="CS2", cs2_potd=True, paper=os.environ.get("CS2_LIVE") != "1", player=r["player"], team=r.get("team"), opp=r.get("opp"), stat=stat,
+                        line=l["line"], side=side, p=0.65, start=l["start"], img=l.get("img"), proj=round(r["model_mu"], 1),
+                        proj_why="CS2 model: map-by-map kills/HS x expected rounds", gap=round(g_, 3),
+                        why="CS2 POTD: biggest projection gap on the board (%.0f%%) -- backtest top-1/day 19-10 (65.5%%)" % (100 * g_)))
+        try:
+            _seen_p = {(json.loads(x_)["date"], json.loads(x_)["player"]) for x_ in open("cs2_potd.jsonl", encoding="utf-8")} if os.path.exists("cs2_potd.jsonl") else set()
+            if (today, r["player"]) not in _seen_p:
+                with open("cs2_potd.jsonl", "a", encoding="utf-8") as _pf:
+                    _pf.write(json.dumps(dict(date=today, player=r["player"], team=r.get("team"), opp=r.get("opp"), match_id=r.get("match_id"), kind=r.get("kind"),
+                                              stat=stat, line=l["line"], side=side, proj=round(r["model_mu"], 1), gap=round(g_, 3), start=l["start"], result=None), ensure_ascii=False) + chr(10))
+        except Exception as e:
+            print("cs2 potd log:", e)
+        print("  CS2 POTD: %s %s %g %s (proj %.1f, gap %.0f%%)" % (r["player"], side, l["line"], stat, r["model_mu"], 100 * g_))
 
 # NFL BETA (10/10, user: "make NFL work, I'm not taking another week without it"). Measured on 1,067 graded PP lines (Week 4-5 2026):
 # when a player's OWN 2026 games went the same way vs THIS line >= 75% of the time (2+ games), that side hit 61.3% (n=326) --
