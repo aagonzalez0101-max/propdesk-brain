@@ -54,7 +54,29 @@ def archived_lines():
             k = ("PP", pl.get("name"), a.get("stat_type"), a.get("description"), a.get("start_time"))
             rows.setdefault(k, dict(app="PP", player=pl.get("name"), team=pl.get("team"), stat=a.get("stat_type"), match=a.get("description"),
                                     start=a.get("start_time"), line=float(a["line_score"])))
+    # 10/16: the raw pp_121_*.json snapshots are compacted into lines.db, and UD closed 10/5 -> the grader found 0 lines and wrote an
+    # empty file every night. Read every PP LoL standard line from lines.db (team code is enough for find()).
+    try:
+        import sqlite3
+        for pl, team, stat, line, start in sqlite3.connect("lines.db").execute(
+                "select player, team, stat, line, start from pp where league=121 and kind='standard'"):
+            k = ("PP", pl, stat, team, start)
+            rows.setdefault(k, dict(app="PP", player=pl, team=team, stat=stat, match="", start=start, line=float(line)))
+    except Exception as e:
+        print("lines.db LoL:", e)
     return list(rows.values())
+
+
+def maps_needed(stat, app):
+    """'MAPS 1-3 Kills' -> games 1..3; 'MAPS 1-2' / 'Maps 1+2' -> 1..2; 'MAP 3 Kills' -> game 3 only (10/16: '1-3' was read as 1-2)."""
+    st = (stat or "")
+    m = re.search(r"MAPS?\s*(\d)\s*[-+]\s*(?:\d\s*[-+]\s*)?(\d)", st, re.I)
+    if m:
+        return list(range(int(m.group(1)), int(m.group(2)) + 1))
+    m = re.search(r"MAP\s*(\d)\b", st, re.I)
+    if m:
+        return [int(m.group(1))]
+    return [1, 2] if app == "PP" else [1]
 
 
 def schedule(since):
@@ -141,9 +163,10 @@ def grade():
             det[mid] = requests.get(API + "/getEventDetails?hl=en-US&id=%s" % mid, headers=H, timeout=30).json()["data"]["event"]
             time.sleep(0.3)
         games = sorted([g for g in det[mid]["match"]["games"]], key=lambda g: g["number"])
-        need = 3 if "1+2+3" in (r["stat"] or "") else (2 if "1+2" in (r["stat"] or "") or r["app"] == "PP" else 1)
-        played = [g for g in games if g["state"] == "completed"][:need]
-        if len(played) < need:
+        want = maps_needed(r["stat"], r["app"])
+        done_ = {g["number"]: g for g in games if g["state"] == "completed"}
+        played = [done_[n] for n in want if n in done_]
+        if len(played) < len(want):
             r["result"] = "VOID"; out.append(r); why["void (map not played)"] += 1; continue
         tot, role, ok = 0, None, True
         names = [p.strip() for p in (r["player"] or "").split("+")]       # PP combos: 'A + B + C' = sum of each (10/4)
