@@ -4,7 +4,7 @@ stats-backed WHY from sports.db: L10, season, last season, vs this opponent, min
 Called by _pair2x.py; webhook = notify.json "discord_webhook" (#card).
     python _cardpost.py "Taylor Hall" CAR CHI "Shots On Goal" 1.5 over      # preview one leg's WHY text
 """
-import json, sqlite3, statistics, datetime, requests, time
+import json, re, sqlite3, statistics, datetime, requests, time
 
 try:                                                    # 10/10 user: "make everything Texas time" -- Central, DST-aware
     from zoneinfo import ZoneInfo
@@ -132,6 +132,53 @@ def nfl_games(leg):
     return G or None
 
 
+# 10/16 user ("it says no game history for that market in the card -- add that so it's easier judgement"): soccer from FotMob (every
+# league, NWSL included -- sports.db only has the big-6 + MLS), CFB from sports.db, NBA preseason from the ESPN logs (_bball).
+CFB_KEYS = {"receiving yards": ("rec_yds",), "rush yards": ("rush_yds",), "pass yards": ("pass_yds",), "receptions": ("rec",),
+            "rush attempts": ("carries",), "pass attempts": ("att",), "pass completions": ("cmp",), "rush+rec yds": ("rush_yds", "rec_yds"),
+            "pass+rush yds": ("pass_yds", "rush_yds")}
+
+
+def other_games(leg):
+    sp, st = leg["sport"], leg["stat"].lower()
+    G = []
+    try:
+        if sp == "SOCCER":
+            import _soccer as _S
+            if st not in _S.STAT:
+                return None
+            pid = _S.find_player(leg["player"], leg.get("team"))
+            if not pid:
+                return None
+            rows = _S.history(pid, st, 20)[0]
+            for r in rows:                                # history() is newest first
+                G.append(dict(season=r["date"][:4], date=r["date"], opp=r.get("opp") or "", mins=r.get("mins") or 0, v=r["v"]))
+        elif sp == "CFB":
+            keys = CFB_KEYS.get(st)
+            if not keys:
+                return None
+            db = sqlite3.connect("sports.db")
+            for d, opp, js in db.execute("select date, opp, stats from player_games where sport='CFB' and player=? order by date", (leg["player"],)):
+                s_ = json.loads(js)
+                G.append(dict(season=d[:4] if d[5:7] >= "07" else str(int(d[:4]) - 1), date=d, opp=opp or "",
+                              mins=float(s_.get("carries") or s_.get("rec") or s_.get("att") or 0), v=sum(float(s_.get(k) or 0) for k in keys)))
+        elif sp == "NBAP":
+            import _bball as _B
+            parts = _B.COMBO.get(re.sub(r"[^a-z0-9]", "", st))
+            a = _B.roster("nba").get(re.sub(r"[^a-z0-9]", "", leg["player"].lower()))
+            if not parts or not a:
+                return None
+            for g in _B.logs("nba", a[0]):
+                if g["min"] > 0:
+                    G.append(dict(season="pre" if g.get("pre") else str(g["season"]), date=g["date"], opp=g.get("opp") or "",
+                                  mins=g["min"], v=sum(g[p_] for p_ in parts)))
+    except Exception as e:
+        print("other_games:", e)
+        return None
+    G.sort(key=lambda g: g["date"])
+    return G or None
+
+
 def _fantasy(s):
     g = lambda k: float(s.get(k) or 0)                # PrizePicks NFL fantasy scoring (same as the backtest)
     return (0.04 * g("passing_yards") + 4 * g("passing_tds") - g("interceptions") + 0.1 * (g("rushing_yards") + g("receiving_yards"))
@@ -157,6 +204,11 @@ def stats_for(leg):
                     mins=statistics.mean(g["mins"] for g in l10), last=G[-1]["date"])
     if sp.upper() in ("CS2", "VAL", "DOTA2", "DOTA 2", "DOTA"):
         G = esports_games(leg)
+        if not G:
+            return None
+        db = None
+    elif sp in ("SOCCER", "CFB", "NBAP"):                 # 10/16 user: these showed "No game history for this market yet"
+        G = other_games(leg)
         if not G:
             return None
         db = None
@@ -266,7 +318,7 @@ def why_text(leg, S):
         if es:
             P.append("⏱️ %.0f %s per series" % (S["mins"], "min" if sp.upper().startswith("DOTA") else "rounds"))
         else:
-            P.append("⏱️ %.1f %s a game" % (S["mins"], "min TOI" if sp == "NHL" else "touches/targets" if sp == "NFL" else "min"))
+            P.append("⏱️ %.1f %s a game" % (S["mins"], "min TOI" if sp == "NHL" else "touches/targets" if sp in ("NFL", "CFB") else "min"))
         P.append("📅 Last played %s" % _day(S["last"]))
         if sp == "NFL":                                   # 10/11 user: usual -> how this defense holds -> what that means (info only until proven)
             try:
