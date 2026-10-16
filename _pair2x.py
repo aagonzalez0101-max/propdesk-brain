@@ -628,8 +628,17 @@ try:
     print("QB OUT legs: %d" % _n_qb)
     # the same data says a backup QB cuts every pass-catcher -> drop that team's receiving OVERS already on the card (Egbuka/Godwin O
     # with Mayfield doubtful, 10/15)
+    # 10/16 (Bateman O20.5, Lamar out): PP cut him 34.5 -> 20.5 (-41%) when backup-QB WRs run 0.80x -- the over was the value. So a
+    # receiving over stays blocked only while PP's line is still above 80% of his average (PP hasn't priced the backup in).
+    def _still_priced_for_starter(x):
+        try:
+            _wk_ = 1 + (datetime.datetime.fromisoformat(x["start"]).astimezone(CT).date() - datetime.date(2026, 9, 8)).days // 7
+            _a = _NR.raw_avg(x["player"], x["stat"], _wk_)
+            return not _a or x["line"] > 0.80 * _a
+        except Exception:
+            return True
     _drop = [x for x in std if x.get("sport") == "NFL" and x.get("team") in _QBOUT_TEAMS and x.get("side") == "over"
-             and x.get("stat") in ("Receiving Yards", "Receptions", "Rush+Rec Yds", "Fantasy Score")]
+             and x.get("stat") in ("Receiving Yards", "Receptions", "Rush+Rec Yds", "Fantasy Score") and _still_priced_for_starter(x)]
     for x in _drop:
         print("  QB OUT blocks: %s O%g %s (%s)" % (x["player"], x["line"], x["stat"], x.get("team")))
     std[:] = [x for x in std if not any(x is d_ for d_ in _drop)]
