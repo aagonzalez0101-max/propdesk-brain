@@ -150,8 +150,8 @@ def render_dashboard(bal, start, goal, day, w, l, stake, op, cash_risk, bonus):
 
 def build():
     R = json.load(open("road.json", encoding="utf-8"))
-    S, G, start = R["start_date"], R["goal"], R["start_roll"] + sum(d["amount"] for d in R.get("deposits", []))   # 10/14: + DraftKings cash
-    live = [r for r in L if r.get("kind") == "LIVE" and r.get("date", "") >= S and not r.get("exclude")]
+    S, G, start = R["start_date"], R["goal"], R["start_roll"] + sum(d["amount"] for d in R.get("deposits", []) if d.get("book") != "DraftKings")   # 10/15 user: DK solo, off the road
+    live = [r for r in L if r.get("kind") == "LIVE" and r.get("date", "") >= S and not r.get("exclude") and r.get("book") != "DraftKings"]   # 10/15 user: DK is solo, not on the road
     done = [r for r in live if r.get("result") in ("WIN", "LOSS", "PUSH", "VOID")]
     op = [r for r in live if r.get("result") in (None, "PENDING")]
     bal = start + sum(r.get("net") or 0 for r in done)

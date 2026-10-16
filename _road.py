@@ -8,9 +8,9 @@ with contextlib.redirect_stdout(io.StringIO()):          # _mission prints its f
     from _mission import tag, L
 R = json.load(open("road.json", encoding="utf-8"))
 S, G = R["start_date"], R["goal"]
-live = [r for r in L if r.get("kind") == "LIVE" and r.get("date", "") >= S and not r.get("exclude")]
+live = [r for r in L if r.get("kind") == "LIVE" and r.get("date", "") >= S and not r.get("exclude") and r.get("book") != "DraftKings"]   # 10/15 user: DK is solo, not on the road
 done = [r for r in live if r.get("result") in ("WIN", "LOSS", "PUSH", "VOID")]
-DEP = sum(d["amount"] for d in R.get("deposits", []) if d["date"] <= datetime.date.today().isoformat())
+DEP = sum(d["amount"] for d in R.get("deposits", []) if d["date"] <= datetime.date.today().isoformat() and d.get("book") != "DraftKings")
 bal = R["start_roll"] + DEP + sum(r.get("net") or 0 for r in done)
 day = (datetime.date.today() - datetime.date.fromisoformat(S)).days + 1
 pct = 100 * (bal - R["start_roll"]) / (G - R["start_roll"])
