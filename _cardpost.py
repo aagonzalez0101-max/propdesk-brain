@@ -395,7 +395,13 @@ def post_slip(k, grp, ph, stake=None, mult=6.0, be=0.55):
                 "🎯 All %d hit **%.0f%%** · worth **%+.0f%%**" % (len(grp), 100 * ph, 100 * value),
                 "💵 %s" % (("**$%.2f → $%.2f**" % (stake, stake * mult)) if stake else "5%% of roll at %gx" % mult),
                 "📏 Break-even %.0f%% a leg · ours avg %.0f%%" % (100 * be, 100 * sum(g["p"] for g in grp) / len(grp)),
-                "📱 Confirm each line on your PP screen"])}
+                "📱 Confirm each line on your PP screen",
+                # 10/16 user ("click a button to take me to the pp bet ... so I don't have to look for players"): PP has no prefill link,
+                # so list the legs in the order you tap them in the app: league tab -> player -> stat -> line -> More/Less
+                "", "**📋 Find it on PrizePicks**"] + ["`%s` → **%s** → %s **%g** → **%s**" % (
+                    {"NBAP": "NBA", "SOCCER": "SOCCER", "CS2": "CS2"}.get(g["sport"], g["sport"]), g["player"], g["stat"], g["line"],
+                    "MORE" if g["side"] == "over" else "LESS") for g in grp] + [
+                "", "🔒 lock · 🎁 bonus · ⏭ skip · 🔄 recheck the lines now"])}
     E = [head]
     for g, S in zip(grp, SS):
         over = g["side"] == "over"
@@ -418,6 +424,12 @@ def post_slip(k, grp, ph, stake=None, mult=6.0, be=0.55):
         longest["description"] = longest["description"].rsplit("\n", 1)[0]
     r = requests.post(hook + "?wait=true", json={"username": "PropDesk", "embeds": E}, timeout=20)
     print("discord slip %d: HTTP %s %s" % (k, r.status_code, r.text[:200] if r.status_code >= 300 else ""))
+    try:                                                    # 10/16: phone push with the legs in PP order, so he can bet straight from the lock screen
+        if r.status_code == 200 and not __import__("os").environ.get("CARD_DRYRUN"):
+            requests.post("https://ntfy.sh/propdesk-6b8fcb9629", timeout=15, headers={"Title": "NEW SLIP %s" % (("$%.2f" % stake) if stake else "")},
+                          data=chr(10).join("%s %s %s %g %s" % (g["sport"], g["player"], g["stat"], g["line"], "MORE" if g["side"] == "over" else "LESS") for g in grp).encode())
+    except Exception as e:
+        print("ntfy slip:", e)
     # 10/10 user: lock/skip by REACTION (self-roles style) -> remember which message is which slip; _reactions.py does the rest
     if r.status_code == 200:
         try:

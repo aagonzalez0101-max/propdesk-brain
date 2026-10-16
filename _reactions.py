@@ -15,7 +15,7 @@ except Exception:
 
 API = "https://discord.com/api/v10"
 POSTED, STATE = "_slips_posted.jsonl", "_reactions_state.json"
-LOCK, BONUS, SKIP = "🔒", "🎁", "⏭️"
+LOCK, BONUS, SKIP, RECHECK = "🔒", "🎁", "⏭️", "🔄"
 
 
 def H():
@@ -45,7 +45,8 @@ def roll():
 
 
 def log_bet(rec, bonus):
-    stake = 5.0 if bonus else round(0.05 * roll(), 2)          # bonus = the $5 flex refund style; cash = 5% of the morning roll
+    # 10/16: the card's TIERED stake (6.5% strong / 5% / 2.5% after slip 3) is stored on the slip -- use it; 5% only for old slips
+    stake = 5.0 if bonus else round(rec.get("stake") or 0.05 * roll(), 2)
     mult = rec.get("mult") or 6.0
     if bonus:
         mult = max(mult - 1, 1.0)                                 # his app pays bonus slips one rung lower (6x -> 5x, 10/10)
@@ -77,6 +78,46 @@ def mark(rec, text, color):
         requests.patch("%s/messages/%s" % (hook, rec["msg_id"]), json={"embeds": E}, timeout=20)
 
 
+def recheck(rec):
+    """re-pull PrizePicks for the slip's legs; post what changed"""
+    LG = {"NFL": 9, "CFB": 15, "NHL": 8, "NBA": 7, "NBAP": 7, "WNBA": 3, "SOCCER": 82, "CS2": 265, "MLB": 2}
+    lines, failed = {}, set()
+    for lg in {LG.get(l["sport"]) for l in rec["legs"] if LG.get(l["sport"])}:
+        d = None
+        for wait in (0, 20, 45):                              # 10/16: a 429 read as "PULLED" -- retry, and never call a failed fetch a pull
+            time.sleep(wait)
+            r = requests.get("https://partner-api.prizepicks.com/projections?league_id=%d&per_page=1000" % lg, timeout=30, headers={"User-Agent": "Mozilla/5.0"})
+            if r.status_code == 200:
+                d = r.json(); break
+        if d is None:
+            failed.add(lg); continue
+        P = {x["id"]: x["attributes"] for x in d.get("included", []) if x["type"] == "new_player"}
+        for p in d.get("data", []):
+            a = p["attributes"]
+            if a.get("odds_type") != "standard":
+                continue
+            nm = P.get(p["relationships"]["new_player"]["data"]["id"], {}).get("name")
+            lines[(nm, a.get("stat_type"))] = float(a["line_score"])
+        time.sleep(1)
+    out = []
+    for l in rec["legs"]:
+        now_ = lines.get((l["player"], l["stat"]))
+        side = "MORE" if l["side"] == "over" else "LESS"
+        if LG.get(l["sport"]) in failed:
+            out.append("⚪ **%s** %s %g -- couldn't reach PrizePicks, check your screen" % (l["player"], l["stat"], l["line"]))
+        elif now_ is None:
+            out.append("❌ **%s** %s %g -- **PULLED** (no standard line now)" % (l["player"], l["stat"], l["line"]))
+        elif now_ == l["line"]:
+            out.append("✅ **%s** %s **%g** %s -- same line" % (l["player"], l["stat"], now_, side))
+        else:
+            better = (now_ < l["line"]) if l["side"] == "over" else (now_ > l["line"])
+            out.append("%s **%s** %s %g → **%g** %s -- %s" % ("🟢" if better else "🟠", l["player"], l["stat"], l["line"], now_, side,
+                                                             "moved OUR way (better)" if better else "moved AGAINST us -- re-ask before locking"))
+    import _cardpost
+    _cardpost.post_embed("🔄 RECHECK · %s" % datetime.datetime.now(CT).strftime("%I:%M %p").lstrip("0"), chr(10).join(out), 0x5865F2)
+    print("recheck posted:", len(out), "legs")
+
+
 def main():
     if not os.environ.get("DISCORD_BOT_TOKEN") or not os.path.exists(POSTED):
         return
@@ -89,11 +130,23 @@ def main():
         if rec["posted"] < cut or mid in st["done"]:
             continue
         if mid not in st["seeded"]:                               # add the three buttons-as-reactions once
-            for e in (LOCK, BONUS, SKIP):
+            for e in (LOCK, BONUS, SKIP, RECHECK):
                 call("PUT", "/channels/%s/messages/%s/reactions/%s/@me" % (ch, mid, urllib.parse.quote(e))); time.sleep(0.4)
             st["seeded"].append(mid); changed = True
             continue
         started = min(x["start"] for x in rec["legs"]) < datetime.datetime.now(datetime.timezone.utc).isoformat()
+        # 10/16 user: 🔄 = re-pull the live PP lines for this slip and reply (Collins' 7.5 got pulled and Hill's line moved before he locked)
+        _rc = users(ch, mid, RECHECK)
+        if _rc and not started:
+            _done_rc = st.setdefault("rechecked", {})
+            if _done_rc.get(mid, 0) < len(_rc) or time.time() - _done_rc.get(mid + "_t", 0) > 600:
+                try:
+                    recheck(rec)
+                except Exception as e:
+                    print("recheck:", e)
+                _done_rc[mid] = len(_rc); _done_rc[mid + "_t"] = time.time(); changed = True
+                for u in _rc:                                     # clear his tap so the next tap asks again (needs Manage Messages; harmless if not)
+                    call("DELETE", "/channels/%s/messages/%s/reactions/%s/%s" % (ch, mid, urllib.parse.quote(RECHECK), u["id"]))
         if users(ch, mid, SKIP):
             mark(rec, "⏭ SKIPPED", 0x7C7C7C); st["done"].append(mid); changed = True
         elif users(ch, mid, LOCK) or users(ch, mid, BONUS):
