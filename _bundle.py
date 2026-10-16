@@ -18,7 +18,8 @@ TAG, ASSET = "data", "bundle.tar.gz"
 SKIP_DIRS = {"lines_archive", "data", "_fotmob", "_img_cache", "_site_cache", "_euro", "_nbl", "_archive_old", "_archive_2026-09",
              ".claude", "__pycache__", ".git", ".github", "betting", "_bundle_tmp", "graphify-out"}
 SKIP_EXT = {".py", ".log", ".out", ".vtt", ".cmd", ".sh", ".md"}
-SKIP_FILES = {".env", "notify.json", ".gitignore", "requirements.txt", ASSET, "_bundle_state.json"}
+SKIP_FILES = {".env", "notify.json", ".gitignore", "requirements.txt", ASSET, "_bundle_state.json",
+              "_dc2026.csv", "bvp.jsonl"}   # 10/16: 127 MB of dead data (no script reads _dc2026; bvp = MLB, paused) -- uploads were timing out
 STATE = "_bundle_state.json"
 
 
