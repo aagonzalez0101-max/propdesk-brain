@@ -32,7 +32,7 @@ def devig(a, b):
     return ia / (ia + ib), ib / (ia + ib)
 
 
-def board(lg):
+def board(lg, hours=36):
     mus = F._get("%s/0.1/leagues/%s/matchups?brandId=0" % (F.PIN, LEAGUE[lg])) or []
     mks = F._get("%s/0.1/leagues/%s/markets/straight" % (F.PIN, LEAGUE[lg])) or []
     now = datetime.datetime.now(datetime.timezone.utc)
@@ -44,7 +44,7 @@ def board(lg):
         if not side.get("home") or not side.get("away") or "(" in side["home"] + side["away"]:
             continue                                            # specials like "Away Runs (15 Games)"
         t = datetime.datetime.fromisoformat(mu["startTime"].replace("Z", "+00:00"))
-        if not (now < t < now + datetime.timedelta(hours=36)):
+        if not (now < t < now + datetime.timedelta(hours=hours)):
             continue
         G[mu["id"]] = dict(home=side["home"], away=side["away"], t=t)
     for m in mks:
@@ -135,9 +135,66 @@ def post(hours=20):
     print("posted %d games" % len(out))
 
 
+def moves(min_pp=3.0):
+    """10/16 user ("you see how I found that easily? you gotta be on top of that"): Lakers -181 / Wizards -194 at his book while Pinnacle had
+    already moved to -204 / -228 -- soft books lag sharp moves. Every hour: snapshot Pinnacle's de-vigged moneyline for every game in the next
+    7 days (sides_snap.jsonl); when a side's fair chance has risen min_pp+ points since the first snapshot, alert ONCE: soft books are likely
+    still near the old price, and any price better than the NEW fair is +EV."""
+    import json, os
+    F_ = "sides_snap.jsonl"; A_ = "_sides_alerted.json"
+    now = datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="minutes")
+    first = {}
+    if os.path.exists(F_):
+        for x in open(F_, encoding="utf-8"):
+            r = json.loads(x); first.setdefault(r["k"], r)
+    alerted = set(json.load(open(A_))) if os.path.exists(A_) else set()
+    snap, alerts = [], []
+    for lg in LEAGUE:
+        try:
+            B = board(lg, hours=24 * 7)
+        except Exception as e:
+            print(lg, e); continue
+        for g in B:
+            if "ml" not in g:
+                continue
+            ph, pa = devig(*g["ml"])
+            k = "%s|%s|%s|%s" % (lg, g["away"], g["home"], g["t"].isoformat()[:13])
+            r = dict(k=k, ts=now, lg=lg, away=g["away"], home=g["home"], t=g["t"].isoformat(), ph=round(ph, 4), pa=round(pa, 4), ml=g["ml"])
+            snap.append(r)
+            f = first.get(k)
+            if not f:
+                continue
+            for side, p0, p1, nm in (("home", f["ph"], ph, g["home"]), ("away", f["pa"], pa, g["away"])):
+                if 100 * (p1 - p0) >= min_pp and (k + side) not in alerted:
+                    alerts.append((lg, nm, g, p0, p1)); alerted.add(k + side)
+    with open(F_, "a", encoding="utf-8") as f:
+        for r in snap:
+            f.write(json.dumps(r) + chr(10))
+    json.dump(sorted(alerted), open(A_, "w"))
+    if alerts:
+        NL = chr(10)
+        body = NL.join("**%s** %s ML (%s, %s): Pinnacle fair **%s -> %s** (+%.0f pts). Soft books lag this -- **any price better than %s is +EV**." % (
+            lg.upper(), nm, (g["away"].split()[-1] + " @ " + g["home"].split()[-1]), g["t"].astimezone(CT).strftime("%a %m/%d %I:%M%p"),
+            amer(p0), amer(p1), 100 * (p1 - p0), amer(p1)) for lg, nm, g, p0, p1 in alerts)
+        print(body)
+        try:
+            import _cardpost as C
+            C.post_embed("📈 SHARP MOVE · soft books are stale", body[:4000], 0x2F80ED)
+        except Exception as e:
+            print("post:", e)
+        try:
+            import requests
+            requests.post("https://ntfy.sh/propdesk-6b8fcb9629", data=("SHARP MOVE: " + "; ".join("%s %s ML fair %s->%s" % (lg.upper(), nm, amer(p0), amer(p1)) for lg, nm, g, p0, p1 in alerts))[:900].encode(), timeout=15)
+        except Exception as e:
+            print("ntfy:", e)
+    print("sides snapshot: %d games, %d new sharp-move alerts" % (len(snap), len(alerts)))
+
+
 if __name__ == "__main__":
     a = sys.argv[1:]
-    if a[:1] == ["post"]:
+    if a[:1] == ["moves"]:
+        moves(float(a[1]) if len(a) > 1 else 3.0); sys.exit(0)
+    elif a[:1] == ["post"]:
         post(); sys.exit(0)
     if len(a) >= 3:
         check(a[0].lower(), a[1], a[2])
