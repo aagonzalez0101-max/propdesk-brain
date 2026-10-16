@@ -73,6 +73,49 @@ if os.path.exists("direction_paper.jsonl"):
 seen_cs = set()
 # 10/11: with 874 graded band legs the CS2 band hits 52.7% -- BELOW the 55% a 3-pick needs (the 56.8% was a smaller sample).
 # CS2 is PAPER: still projected, logged and graded by _cs2_live / _cs2_grade, but not carded for money unless CS2_LIVE=1.
+# 10/16 user ("for CFB look for mismatches ... backtest like we did with NFL"): the NFL own-rate rule FAILS in CFB (48-50% on 1,757 lines --
+# schedules swing too much). What works is the SHARP MISMATCH: on 325 graded PP CFB lines with a FanDuel/Pinnacle price, the side the sharp
+# books made 55%+ hit 64.5% (n=152, halves 66/63); 58%+ hit 69.1% (n=94, halves 74/64); 65%+ 82.9% (n=35). PP closes these gaps within hours
+# (10/16: Brown-Stephens 26.5 -> 31.5, Lawson 46.5 -> 56.5), so the price is taken at PP's CURRENT line. BET (backtested, user 10/15 rule).
+try:
+    import sqlite3 as _sq5, bisect as _bs5
+    _SMAP5 = {"Receiving Yards": "receiving yards", "Rush Yards": "rushing yards", "Pass Yards": "passing yards", "Receptions": "receptions"}
+    _SH5 = collections.defaultdict(list)
+    for _bk, _pl, _st, _ln, _po, _ts in _sq5.connect("lines.db").execute(
+            "select book, player, stat, line, p_over, ts from sharp where sport='CFB' and ts >= ?", ((datetime.datetime.now(CT) - datetime.timedelta(days=2)).isoformat()[:10],)):
+        _SH5[(M.norm(_pl), _st.lower())].append((_ts, float(_ln), float(_po)))
+    def _cfb_fair(pl, stat, line):
+        R = _SH5.get((M.norm(pl), _SMAP5.get(stat, "-")))
+        if not R:
+            return None
+        last = max(r[0] for r in R)[:13]
+        pts = sorted({(l_, p_) for t_, l_, p_ in R if t_[:13] == last})
+        xs = [l_ for l_, _ in pts]
+        if not xs or line < xs[0] or line > xs[-1]:
+            return None
+        i = _bs5.bisect_left(xs, line)
+        if xs[i] == line:
+            return pts[i][1]
+        (l0, p0), (l1, p1) = pts[i - 1], pts[i]
+        return p0 + (p1 - p0) * (line - l0) / (l1 - l0)
+    _n5 = 0
+    for (sp, pl, st), l in live.items():
+        if sp != "CFB" or l.get("kind") != "standard" or l["stat"] not in _SMAP5:
+            continue
+        if datetime.datetime.fromisoformat(l["start"]).astimezone(datetime.timezone.utc) < now:
+            continue
+        po = _cfb_fair(l["player"], l["stat"], l["line"])
+        if po is None or max(po, 1 - po) < 0.58:
+            continue
+        side = "over" if po >= 0.5 else "under"; ps = max(po, 1 - po)
+        std.append(dict(sport="CFB", cfb_sharp=True, player=l["player"], team=l.get("team"), opp=l.get("opp"), stat=l["stat"], line=l["line"], side=side,
+                        p=0.82 if ps >= 0.65 else 0.68, start=l["start"], img=l.get("img"),
+                        why="CFB SHARP MISMATCH: FanDuel/Pinnacle make %s %g %.0f%% (backtest: sharp 58%%+ -> 69%% hit, 65%%+ -> 83%%)" % (side, l["line"], 100 * ps)))
+        _n5 += 1
+    print("CFB SHARP legs: %d" % _n5)
+except Exception as e:
+    print("cfb sharp:", e)
+
 # 10/16 user ("we'll only really use 1-2 lines from any esport -- choose the best of the best"): CS2 POTD. Backtest, 1,801 graded
 # standard CS2 legs over 29 days: the ONE leg a day with the biggest projection gap (model mean vs line) went 19-10 (65.5%, halves 71/60);
 # the 2nd leg drops it to ~55%, and the old edge 3-9% band went 43-45% as a top pick. So: one CS2 leg a day, biggest gap, PP line at
@@ -1080,7 +1123,7 @@ print("probation rules live: %s" % {k: ("HALF-STAKE BET" if v else "back to PAPE
 _FULL = lambda s: any(s.get(t) and _PROB[t] for t in _PROB)
 probation = lambda s: False and (
     (s.get("nfl_agree") and NFL_AGREE_LIVE) or (s.get("nba_role_under") and NBA_ROLE_LIVE["under"]) or (s.get("nba_pre_under") and NBAP_LIVE))
-money_ok = lambda s: bool(s.get("qb_out")) or _FULL(s) or probation(s) or bool(s.get("promo")) or (bool(s.get("beta")) and NFL_BETA_LIVE) or bool(s.get("soccer_hit")) or bool(s.get("nhl_under")) or (bool(s.get("nba_pre_under")) and NBAP_LIVE) or (bool(s.get("nfl_agree")) and NFL_AGREE_LIVE) or (bool(s.get("nba_role_under")) and NBA_ROLE_LIVE["under"]) or (bool(s.get("nba_role_over")) and NBA_ROLE_LIVE["over"]) or (s["sport"] in ("NHL", "WNBA") and not s.get("paper"))
+money_ok = lambda s: bool(s.get("cfb_sharp")) or bool(s.get("qb_out")) or _FULL(s) or probation(s) or bool(s.get("promo")) or (bool(s.get("beta")) and NFL_BETA_LIVE) or bool(s.get("soccer_hit")) or bool(s.get("nhl_under")) or (bool(s.get("nba_pre_under")) and NBAP_LIVE) or (bool(s.get("nfl_agree")) and NFL_AGREE_LIVE) or (bool(s.get("nba_role_under")) and NBA_ROLE_LIVE["under"]) or (bool(s.get("nba_role_over")) and NBA_ROLE_LIVE["over"]) or (s["sport"] in ("NHL", "WNBA") and not s.get("paper"))
 # 10/15 user: "6.5% first 3 if it's crazy good, if not we keep it going -- don't hold a slot because later will be good too, just lower the
 # stake after that" (two6zero: lower the stake later on). Tiered by the slip's place in the day (game-day count):
 #   slips 1-3: 6.5% if the slip is STRONG (joint p >= 0.44 = two ~66% legs), else 5%;  slips 4-6: 2.5%;  hard stop at 6
