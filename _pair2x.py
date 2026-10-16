@@ -929,9 +929,59 @@ NFL_BETA_LIVE = _beta_live()
 # Lopez), legs they keep went 8-2. Applied last, to every leg, BET or paper:
 #   1. tiny lines are noise, not edge: NFL receiving/rush yards <= 5.5, receptions/targets/rush attempts <= 1.5 (Hampton O3.5, Arroyo O3.5)
 #   2. club keeper passes: his OWN starts must go our way at least half the time (Rossi U26.5: 6 of 15)
+_INJ_POS, _INJ_Q = {}, set()   # 10/16: (team, pos) -> Out/Doubtful/IR names ; questionable players
+try:
+    import requests as _rq4
+    _TMAP = {}
+    for _t in _rq4.get("https://site.api.espn.com/apis/site/v2/sports/football/nfl/injuries", timeout=30).json().get("injuries", []):
+        for _i in _t.get("injuries", []):
+            _a = _i.get("athlete") or {}; _ps = (_a.get("position") or {}).get("abbreviation"); _stt = _i.get("status") or ""
+            _tm = ((_a.get("team") or {}).get("abbreviation")) or _t.get("abbreviation") or _t.get("displayName")
+            if _stt in ("Out", "Doubtful", "Injured Reserve"):
+                _INJ_POS.setdefault(_ps, set()).add((_t.get("displayName"), _a.get("displayName")))
+            elif _stt == "Questionable":
+                _INJ_Q.add(_a.get("displayName"))
+except Exception as e:
+    print("research gate injuries:", e)
+
+
+def _teammate_out(x):
+    """same-team, same-position teammate Out/Doubtful/IR this week (team matched through the 2026 weekly rows)"""
+    try:
+        pos_ = {r_["player_display_name"]: (r_.get("position"), r_.get("recent_team") or r_.get("team")) for r_ in _NR.W26}
+        mine = pos_.get(x["player"])
+        if not mine:
+            return None
+        for _tdisp, nm_ in _INJ_POS.get(mine[0], ()):
+            o_ = pos_.get(nm_)
+            if o_ and o_[1] == mine[1] and nm_ != x["player"]:
+                return nm_
+    except Exception:
+        return None
+    return None
+
+
 def _research_ok(x):
     if x.get("promo"):
         return True, ""
+    #   7. (10/16: Lloyd U42.5 with Jacobs OUT, Daniels U37.5 rush with Mayfield OUT, Theo Johnson questionable) -- an UNDER on a
+    #      player whose role just grew is built on his old, smaller role; and a questionable player can sit or be limited.
+    if x.get("sport") == "NFL":
+        if x["player"] in _INJ_Q:
+            return False, "he is questionable"
+        if x["side"] == "under":
+            _to = _teammate_out(x)
+            if _to:
+                return False, "under with teammate %s out (role grows)" % _to
+            if "Rush" in x["stat"]:
+                try:
+                    _me = next((r_ for r_ in _NR.W26 if r_["player_display_name"] == x["player"]), None)
+                    if _me and _me.get("position") == "QB" and _teammate_out(dict(x, player=x["player"])) is None:
+                        _tq = _me.get("recent_team") or _me.get("team")
+                        if any(o_ for _t2, o_ in _INJ_POS.get("QB", ()) if next((r_ for r_ in _NR.W26 if r_["player_display_name"] == o_ and (r_.get("recent_team") or r_.get("team")) == _tq), None)):
+                            return False, "backup QB starting -- his rush history is from mop-up snaps"
+                except Exception:
+                    pass
     if x.get("sport") == "NFL":
         if x["stat"] in ("Receiving Yards", "Rush Yards") and x["line"] <= 5.5:
             return False, "tiny line %g" % x["line"]
