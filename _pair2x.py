@@ -81,7 +81,7 @@ try:
     import sqlite3 as _sq5, bisect as _bs5
     _SMAP5 = {"Receiving Yards": "receiving yards", "Rush Yards": "rushing yards", "Pass Yards": "passing yards", "Receptions": "receptions"}
     _SH5 = collections.defaultdict(list)
-    for _bk, _pl, _st, _ln, _po, _ts in _sq5.connect("lines.db").execute(
+    for _bk, _pl, _st, _ln, _po, _ts in _sq5.connect("lines.db", timeout=60).execute(
             "select book, player, stat, line, p_over, ts from sharp where sport='CFB' and ts >= ?", ((datetime.datetime.now(CT) - datetime.timedelta(days=2)).isoformat()[:10],)):
         _SH5[(M.norm(_pl), _st.lower())].append((_ts, float(_ln), float(_po)))
     def _cfb_fair(pl, stat, line):
@@ -1331,7 +1331,7 @@ try:
         # "crazy" = PP just moved the line our way: the last different standard line for this player+stat (lines.db, 3 days) was 15%+
         # tougher (Allgeier rush att 6.5 -> 4.5 on an over). A big % gap alone is NOT crazy -- tiny lines (O3.5 rec yds) make it trivial.
         import sqlite3 as _sq
-        _ldb = _sq.connect("lines.db") if os.path.exists("lines.db") else None
+        _ldb = _sq.connect("lines.db", timeout=60) if os.path.exists("lines.db") else None
         def _moved_our_way(x):
             if not _ldb:
                 return None

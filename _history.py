@@ -40,7 +40,7 @@ def nfl_week(day):
 
 
 def build():
-    L = sqlite3.connect("lines.db"); S = sqlite3.connect("sports.db")
+    L = sqlite3.connect("lines.db", timeout=60); S = sqlite3.connect("sports.db")
     # actuals index: (sport, key, day) -> stats ; key = full norm name and short name
     idx = {}
     for sp in set(SPORT.values()):

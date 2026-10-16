@@ -21,7 +21,7 @@ def first_line(player, stat, day):
     import sqlite3, os
     if not os.path.exists("lines.db"):
         return None
-    c = sqlite3.connect("lines.db")
+    c = sqlite3.connect("lines.db", timeout=60)
     r = c.execute("SELECT line FROM pp WHERE player=? AND stat=? AND kind='standard' AND substr(start,1,10)=? ORDER BY rowid LIMIT 1",
                   (player, stat, day)).fetchone()
     return r[0] if r else None
