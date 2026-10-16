@@ -106,6 +106,7 @@ def main(minutes):
             before = os.path.getmtime("live_paper.jsonl") if os.path.exists("live_paper.jsonl") else 0
             if os.environ.get("DISCORD_BOT_TOKEN"):
                 run(["_reactions.py"], 120)
+                run(["_ask.py"], 300)                         # 10/16: #ask -- he types a leg, the bot answers within a minute
             if os.path.exists("live_paper.jsonl") and os.path.getmtime("live_paper.jsonl") != before:
                 sync()
             time.sleep(60)
