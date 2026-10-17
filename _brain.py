@@ -58,6 +58,21 @@ def sync():
     subprocess.run([sys.executable, "_bundle.py", "push", "--cloud"], check=False)
 
 
+def code_sync():
+    """10/17: a cloud run used to keep the code it started with for ~5.5h, so it kept posting slips from rules I had already fixed
+    (CFB receptions / receiving yards). Every hour: fetch main and update ONLY the tracked .py files that changed -- data files are
+    never touched (they come from the bundle). The next script run uses the new code; _brain.py itself updates at the next restart."""
+    try:
+        subprocess.run(["git", "fetch", "-q", "origin", "main"], timeout=120, check=False)
+        ch = subprocess.run(["git", "diff", "--name-only", "HEAD", "origin/main", "--", "*.py"], capture_output=True, text=True, timeout=60).stdout.split()
+        ch = [f for f in ch if f != "_brain.py"]
+        if ch:
+            subprocess.run(["git", "checkout", "-q", "origin/main", "--"] + ch, timeout=120, check=False)
+            print("code sync: %d file(s) updated -- %s" % (len(ch), ", ".join(ch[:8])), flush=True)
+    except Exception as e:
+        print("code sync:", e, flush=True)
+
+
 def main(minutes):
     end = time.time() + minutes * 60
     done = load()
@@ -83,6 +98,7 @@ def main(minutes):
             key = "%s %02d hourly" % (day, now.hour)
             if key not in done and now.minute >= 5 and (end - time.time()) > 1500:
                 print("%s CT -- hourly" % now.strftime("%H:%M"), flush=True)
+                code_sync()                                   # 10/17 user ("why does it do this? you should agree"): take my fixes within the hour
                 for c in HOURLY:
                     run(c, 1200)
                 done[key] = now.isoformat(timespec="minutes")
