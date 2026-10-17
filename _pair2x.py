@@ -153,8 +153,8 @@ if os.path.exists("cs2_paper.jsonl"):
                         proj_why="CS2 model: map-by-map kills/HS x expected rounds", gap=round(g_, 3),
                         why="CS2 POTD: biggest projection gap on the board (%.0f%%) -- backtest top-1/day 19-10 (65.5%%)" % (100 * g_)))
         try:
-            _seen_p = {(json.loads(x_)["date"], json.loads(x_)["player"]) for x_ in open("cs2_potd.jsonl", encoding="utf-8")} if os.path.exists("cs2_potd.jsonl") else set()
-            if (today, r["player"]) not in _seen_p:
+            _seen_p = {json.loads(x_)["date"] for x_ in open("cs2_potd.jsonl", encoding="utf-8")} if os.path.exists("cs2_potd.jsonl") else set()
+            if today not in _seen_p:                          # 10/17: ONE pick of the day -- the first one stands (7 got logged 10/16-17)
                 with open("cs2_potd.jsonl", "a", encoding="utf-8") as _pf:
                     _pf.write(json.dumps(dict(date=today, player=r["player"], team=r.get("team"), opp=r.get("opp"), match_id=r.get("match_id"), kind=r.get("kind"),
                                               stat=stat, line=l["line"], side=side, proj=round(r["model_mu"], 1), gap=round(g_, 3), start=l["start"], result=None), ensure_ascii=False) + chr(10))
