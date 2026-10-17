@@ -79,14 +79,19 @@ seen_cs = set()
 # (10/16: Brown-Stephens 26.5 -> 31.5, Lawson 46.5 -> 56.5), so the price is taken at PP's CURRENT line. BET (backtested, user 10/15 rule).
 try:
     import sqlite3 as _sq5, bisect as _bs5
-    # 10/17 (_cfb_model.py bt, last PP line before kickoff, sharp prices up to then): RECEIVING YARDS 62%+ -> 74% (n=23, halves 64/83),
-    # 66%+ -> 76%; RUSH YARDS 50% (QB sacks count as rushing -- Stokes -23 on 8 carries 10/16; RB carry splits), receptions 47%,
-    # fantasy built from the sharp pieces 55-60%. -> receiving yards only.
-    _SMAP5 = {"Receiving Yards": "receiving yards"}
+    # 10/17 CORRECTED: priced at PP's exact line INSIDE the sharp ladder (no extrapolation -- a one-rung extrapolation produced fake 100% legs
+    # and a fake "receiving yards 74%"): RUSH YARDS sharp 57%+ -> 85% (n=34, halves 82/88), 62%+ -> 90%; PASS YARDS 55%+ -> 75% (n=16);
+    # RECEIVING YARDS 57%+ -> 56% (halves 71/41, fading); RECEPTIONS 32%. QBs excluded from rush yards (sacks count as rushing -- Stokes 10/16).
+    _SMAP5 = {"Rush Yards": "rushing yards", "Pass Yards": "passing yards"}
     _SH5 = collections.defaultdict(list)
     for _bk, _pl, _st, _ln, _po, _ts in _sq5.connect("lines.db", timeout=60).execute(
             "select book, player, stat, line, p_over, ts from sharp where sport='CFB' and ts >= ?", ((datetime.datetime.now(CT) - datetime.timedelta(days=2)).isoformat()[:10],)):
         _SH5[(M.norm(_pl), _st.lower())].append((_ts, float(_ln), float(_po)))
+    _QB5 = set()
+    for _pl5, _js5 in _sq5.connect("sports.db").execute("select player, stats from player_games where sport='CFB' and date >= '2026-08-01'"):
+        if float(json.loads(_js5).get("att") or 0) >= 8:
+            _QB5.add(M.norm(_pl5))
+    _cfb_is_qb = lambda pl: M.norm(pl) in _QB5
     def _cfb_fair(pl, stat, line):
         R = _SH5.get((M.norm(pl), _SMAP5.get(stat, "-")))
         if not R:
@@ -105,15 +110,17 @@ try:
     for (sp, pl, st), l in live.items():
         if sp != "CFB" or l.get("kind") != "standard" or l["stat"] not in _SMAP5:
             continue
+        if l["stat"] == "Rush Yards" and (l.get("position") == "QB" or _cfb_is_qb(l["player"])):
+            continue
         if datetime.datetime.fromisoformat(l["start"]).astimezone(datetime.timezone.utc) < now:
             continue
         po = _cfb_fair(l["player"], l["stat"], l["line"])
-        if po is None or max(po, 1 - po) < 0.58:
+        if po is None or max(po, 1 - po) < 0.57:
             continue
         side = "over" if po >= 0.5 else "under"; ps = max(po, 1 - po)
         std.append(dict(sport="CFB", cfb_sharp=True, player=l["player"], team=l.get("team"), opp=l.get("opp"), stat=l["stat"], line=l["line"], side=side,
-                        p=0.76 if ps >= 0.66 else 0.72 if ps >= 0.62 else 0.66, start=l["start"], img=l.get("img"),
-                        why="CFB SHARP MISMATCH (receiving yards): FanDuel/Pinnacle make %s %g %.0f%% (backtest: 62%%+ -> 74%%, 66%%+ -> 76%%)" % (side, l["line"], 100 * ps)))
+                        p=0.80 if ps >= 0.62 else 0.75, start=l["start"], img=l.get("img"),
+                        why="CFB SHARP MISMATCH (%s): FanDuel/Pinnacle make %s %g %.0f%% (backtest rush yds 57%%+ -> 85%%, pass yds 55%%+ -> 75%%)" % (l["stat"].lower(), side, l["line"], 100 * ps)))
         _n5 += 1
     print("CFB SHARP legs: %d" % _n5)
 except Exception as e:

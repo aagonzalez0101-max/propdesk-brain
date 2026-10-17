@@ -51,10 +51,10 @@ def median(player, stat, before=None):
     for (l0, p0), (l1, p1) in zip(pts, pts[1:]):
         if p0 >= 0.5 >= p1 and p0 != p1:
             return l0 + (l1 - l0) * (p0 - 0.5) / (p0 - p1)
-    if len(pts) == 1:
-        l, p = pts[0]
-        return l + (0.5 - (1 - p)) * max(l, 5) * 0.6 if p != 0.5 else l
-    return None
+    if len(pts) == 1 and pts[0][1] == 0.5:
+        return pts[0][0]
+    return None                                             # 10/17: one alt rung or a ladder that never crosses 50% -> no median (it produced
+                                                            # "100%" legs like proj 11.7 vs 37.5 -- an extrapolation, not a price)
 
 
 _games = None
