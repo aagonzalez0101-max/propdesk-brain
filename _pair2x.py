@@ -1133,6 +1133,12 @@ def _probation_ok(tag):
     except Exception:
         return True
 _PROB = {t: _probation_ok(t) for t in ("nfl_agree", "nba_role_under", "nba_pre_under")}
+# 10/18 user ("fastest but smartest"): money only on markets measured 62%+ forward on PP lines. NFL AGREE went 154-186 (45%) through
+# week 6 -> off for good, whatever its paper file says (a bundle merge wiped its grades once). NBA role/preseason unders have no
+# regular-season forward record yet -> paper until they do.
+_PROB.update(nfl_agree=False, nba_role_under=False, nba_pre_under=False)
+NFL_AGREE_LIVE = False
+NBA_ROLE_LIVE = {"under": False, "over": False}; NBAP_LIVE = False
 print("probation rules live: %s" % {k: ("HALF-STAKE BET" if v else "back to PAPER") for k, v in _PROB.items()})
 # 10/15 user: "fuck the paper testing unless it's esports" -> backtested rules bet FULL stake from day 1; the auto-demote (under 57.7% after
 # 20 graded legs -> back to paper) stays, because that is a measured loss, not a test.
