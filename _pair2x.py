@@ -8,6 +8,10 @@ best goblin you decide -- that's how we get the 2x's").
     python _pair2x.py
 """
 import json, datetime, os, re, subprocess, sys, collections
+# 10/18 user: "stop the cloud from giving me the slips" -- slips come from a local session now. In the cloud this script still builds,
+# logs and grades the paper records, but posts nothing to Discord (_cardpost.cfg() returns no webhook under CARD_DRYRUN).
+if os.environ.get("GITHUB_ACTIONS") and not os.path.exists("cloud_slips_on.flag"):
+    os.environ["CARD_DRYRUN"] = "1"
 import _props as P, _mismatch as M
 
 try:                                                    # 10/10 user: everything in Texas time (Central, DST-aware)
