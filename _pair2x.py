@@ -358,6 +358,12 @@ try:
             lv = live.get(("SOCCER", M.norm(r["player"]), M.norm(r["stat"])))
             if not lv or float(lv["line"]) != float(r["line"]):
                 print("  soccer HIT not live at %s: %s %s" % (r["line"], r["player"], r["stat"])); continue
+            # 10/18 measured (keeper passes TAKE/LEAN calls): UNDER when the keeper's team is a <30% underdog 15-6 (71%); even game 8-8,
+            # favourite 8-8 -> a keeper under needs his team under 30% to win (no price = no leg). Outfield unders hold in every state (60-67%).
+            if "keeper" in json.dumps(r.get("position") or "").lower() and r["side"] == "under":
+                _w = (r.get("pin") or {}).get("win") if isinstance(r.get("pin"), dict) else None
+                if _w is None or _w >= 0.30:
+                    print("  soccer keeper under dropped (team %s to win, needs < 30%%): %s" % ("?" if _w is None else "%.0f%%" % (100 * _w), r["player"])); continue
             std.append(dict(sport="SOCCER", soccer_hit=True, player=r["player"], team=r.get("team"), opp=r.get("opp"), stat=r["stat"],
                             line=r["line"], side=r["side"], p=0.70, start=r["start"], proj=r.get("adj_avg") or r.get("avg"),
                             proj_why="last %d starts, adjusted for the opponent (%s; script %s)" % (r.get("n") or 15, r.get("factor_why") or "neutral", r.get("script") or "?"),
@@ -380,6 +386,8 @@ try:
             continue
         if r.get("kind") not in (None, "standard"):
             continue
+        if "save" not in r["stat"].lower():
+            continue                                                   # 10/18: on lines PP actually posts, only saves unders hold (13-6); points/assists 6-4, shots 5-7
         _m = r.get("mult")
         if isinstance(_m, dict):
             _m = _m.get("under")
