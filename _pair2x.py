@@ -362,6 +362,16 @@ try:
             # favourite 8-8 -> a keeper under needs his team under 30% to win (no price = no leg). Outfield unders hold in every state (60-67%).
             if "keeper" in json.dumps(r.get("position") or "").lower() and r["side"] == "under":
                 _w = (r.get("pin") or {}).get("win") if isinstance(r.get("pin"), dict) else None
+                if _w is None and re.search(r"(\d+)%", str(r.get("script") or "")):
+                    _w = int(re.search(r"(\d+)%", str(r["script"])).group(1)) / 100.0      # board files carry "DOG 19%", not the pin dict
+                if _w is None:                                          # the board file has no price -> the screen's calls_log row does
+                    if "_SOC_PIN" not in globals():
+                        globals()["_SOC_PIN"] = {}
+                        for _x in open("calls_log.jsonl", encoding="utf-8"):
+                            _c = json.loads(_x)
+                            if _c.get("sport") == "SOCCER" and isinstance(_c.get("pin"), dict) and _c.get("start"):
+                                _SOC_PIN[(_c["player"], _c["start"][:10])] = _c["pin"].get("win")
+                    _w = _SOC_PIN.get((r["player"], r["start"][:10]))
                 if _w is None or _w >= 0.30:
                     print("  soccer keeper under dropped (team %s to win, needs < 30%%): %s" % ("?" if _w is None else "%.0f%%" % (100 * _w), r["player"])); continue
             std.append(dict(sport="SOCCER", soccer_hit=True, player=r["player"], team=r.get("team"), opp=r.get("opp"), stat=r["stat"],
