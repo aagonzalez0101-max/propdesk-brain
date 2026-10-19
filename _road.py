@@ -18,7 +18,7 @@ print("ROAD TO $%d  --  day %d   start $%.2f%s -> now $%.2f   (betting profit %+
       (" + $%.2f deposited" % DEP) if DEP else "", bal, bal - R["start_roll"] - DEP, max(pct, 0)))
 bar = int(max(0, min(1, (bal - R["start_roll"]) / (G - R["start_roll"]))) * 30)
 _morning = R["start_roll"] + DEP + sum(x.get("net") or 0 for x in done if x["date"] < datetime.date.today().isoformat())   # stake fixed on the morning roll
-print("[" + "#" * bar + "-" * (30 - bar) + "]   today's stake (5%% of the morning roll $%.2f): $%.2f" % (_morning, R["stake_pct"] * _morning))
+print("[" + "#" * bar + "-" * (30 - bar) + "]   today's stake (%d%% of the morning roll $%.2f): $%.2f" % (100 * R["stake_pct"], _morning, R["stake_pct"] * _morning))
 by = collections.defaultdict(list)
 for r in done: by[r["date"]].append(r)
 run = R["start_roll"]

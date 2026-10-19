@@ -256,6 +256,8 @@ try:
                         continue
             except Exception as e:
                 print("fd fantasy:", e)
+        if l["stat"] == "Receiving Yards":                      # 10/18 forward: BETA receiving yds 7-8 (47%) vs rush yds 8-2 -- WR yards on 2-3
+            continue                                            # targets swing to 0 (Ridley/Bateman/Juwan/BTJ all 0 on Sunday)
         own = hit if side == "over" else 1 - hit
         std.append(dict(sport="NFL", player=l["player"], team=l.get("team"), opp=l.get("opp"), stat=l["stat"], line=l["line"], side=side,
                         p=0.61, proj=round(avg, 1), proj_why="his 2026 average", why="NFL BETA own-rate: %d of %d games %s, avg %.1f (1 week measured: 61%%, holdout 49%%)"
@@ -1146,10 +1148,8 @@ def _strong_leg(g):
         return False
     gap = (float(g["proj"]) - g["line"]) / g["line"] * (1 if g["side"] == "over" else -1)
     return gap >= STRONG_GAP and money_ok(g) and g.get("mkt_rate", 0.5) >= 0.5
-def _stake_for(pos, grp):
-    if pos < 3:
-        return STAKE if all(_strong_leg(g) for g in grp) else 0.05
-    return 0.025
+def _stake_for(pos, grp):                                       # 10/18 user: roll reset to $50, "we doing $5 bets now" -> slips 1-3 10%, 4-6 5%
+    return 0.10 if pos < 3 else 0.05
 CRAZY = lambda s: bool(s.get("promo")) or s.get("p_model", s["p"]) >= 0.66 or bool(s.get("qb_out_crazy"))   # 10/15: the model's own p, not the market-nudged one
 by_fam = collections.defaultdict(list)
 for s in sorted(std, key=lambda s: (-s["p"], -s.get("gap", 0))):
@@ -1388,7 +1388,7 @@ try:
                          " (was %g)" % grp_[0]["was_line"] if grp_[0].get("was_line") is not None else ""),
                          "Partner: **%s** %s %g %s (%.0f%%)%s" % (grp_[1]["player"], "HIGHER" if grp_[1]["side"] == "over" else "LOWER", grp_[1]["line"], grp_[1]["stat"],
                                                                    100 * grp_[1]["p"], "" if money_ok(grp_[1]) else " -- paper-tier partner, half stake"), 0xFF3B3B)
-            C.post_slip(99, grp_, grp_[0]["p"] * grp_[1]["p"], stake=(0.025 if _half else (STAKE if all(_strong_leg(g) for g in grp_) else 0.05)) * rl if rl else None, mult=3.0, be=0.577)
+            C.post_slip(99, grp_, grp_[0]["p"] * grp_[1]["p"], stake=(0.05 if _half else 0.10) * rl if rl else None, mult=3.0, be=0.577)
             print("FORCED PAIR posted:", " / ".join(g["player"] for g in grp_))
         _solo = [x for x in _solo if not any(x is g for t in _forced for g in t)]
         if _forced:
@@ -1409,7 +1409,7 @@ try:
     _h = datetime.datetime.now(CT).hour
     C.post_embed((("🌙 OVERNIGHT EDGE · %s" if (_h >= 23 or _h < 7) else "🆕 NEW LINES · %s") if os.environ.get("NEW_ONLY") else ("🧾 TOMORROW'S CARD · %s" if datetime.datetime.now(CT).hour >= 18 else "🧾 TODAY'S CARD · %s")) % datetime.datetime.now(CT).strftime("%a %m/%d %I:%M %p"),
                  "**%d slip%s** below%s.\n\n**🔺 OVERS that qualify (%d)**\n%s\n\n**🔻 UNDERS that qualify (%d)**\n%s"
-                 % (len(slips), "" if len(slips) == 1 else "s", (" · roll $%.2f · stakes: first 3 $%.2f if STRONG (proj 20%%+ past the line + history backs it) / $%.2f, then $%.2f" % (rl, STAKE * rl, 0.05 * rl, 0.025 * rl)) if rl else "",
+                 % (len(slips), "" if len(slips) == 1 else "s", (" · roll $%.2f · stakes: first 3 $%.2f, then $%.2f" % (rl, 0.10 * rl, 0.05 * rl)) if rl else "",
                     len(_ov), side(_ov), len(_un), side(_un)))
     for _i, (k_, grp_, ph_, mult_, tag_, fam_) in enumerate(slips):
         for g in grp_:
