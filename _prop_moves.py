@@ -53,6 +53,11 @@ def open_legs():
 
 
 def push(msg):
+    try:                                                    # 10/20: laptop pop-up + Discord + phone in one call
+        import _push
+        _push.push("PROP ALERT" if "PROMO" not in msg else "NEW PROMO", msg, 0xFF4FD8 if "PROMO" in msg else 0xFFA42B); return
+    except Exception as e:
+        print("_push:", e)
     os.makedirs("daily_log", exist_ok=True)
     with open(os.path.join("daily_log", "feed.txt"), "a", encoding="utf-8") as f:
         f.write("%s %s\n" % (datetime.datetime.now(CT).strftime("%m/%d %H:%M"), msg))
