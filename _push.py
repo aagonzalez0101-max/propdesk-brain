@@ -18,7 +18,7 @@ def push(title, body, color=0x1DB954):
     with open(os.path.join("daily_log", "feed.txt"), "a", encoding="utf-8") as f:
         f.write("%s %s | %s\n" % (datetime.datetime.now(CT).strftime("%m/%d %H:%M"), title, body.replace("\n", " / ")))
     sent.append("feed")
-    if not os.environ.get("GITHUB_ACTIONS"):
+    if not os.environ.get("GITHUB_ACTIONS") and "PROMO" in title.upper():     # 10/20 user: laptop pop-ups = PROMOS ONLY; bets get typed in chat
         try:
             import _promos
             _promos.toast(title, body.replace("\n", " | ")); sent.append("laptop")
