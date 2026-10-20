@@ -88,8 +88,8 @@ def one_pass():
             mv = ln - old[k]; pct = abs(mv) / max(old[k], 1)
             if norm(pl) in mine:
                 alerts.append("YOUR LEG %s %s %s: %g -> %g (%+g)" % (lgname, pl, stat, old[k], ln, mv))
-            elif pct >= 0.10:
-                alerts.append("BIG MOVE %s %s %s: %g -> %g (%+.0f%%)" % (lgname, pl, stat, old[k], ln, 100 * mv / max(old[k], 1)))
+            elif pct >= 0.10:                                       # 10/20 user: no big-jump alerts -- console/feed only, never pushed
+                print("  (big move, not pushed) %s %s %s: %g -> %g" % (lgname, pl, stat, old[k], ln))
     for k in old:
         if k.startswith("PROMO|"):
             continue
