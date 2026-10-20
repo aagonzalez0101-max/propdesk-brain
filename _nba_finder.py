@@ -138,7 +138,26 @@ def dk_fair(team_full, opp_full, player, stat, line, sd):
     return po, (src if po is not None else "no DK line"), gl
 
 
-def card(player, stat, line=None, side="over", opp=None):
+def onoff(db, player, teammate, keys, line, side):
+    """his 2025-26 numbers in games WITH vs WITHOUT a teammate (same team, he played 15+ min). None when they weren't teammates."""
+    f = lambda s, k: float(s.get(k) or 0)
+    mine = [(gid, t, m or 0, json.loads(s)) for gid, t, m, s in db.execute(
+        "select game_id, team, minutes, stats from player_games where sport='NBA' and season='2025-26' and player=?", (player,))]
+    if not mine:
+        return None
+    team = collections.Counter(t for _, t, _, _ in mine).most_common(1)[0][0]
+    tm_games = {gid for (gid,) in db.execute("select game_id from player_games where sport='NBA' and season='2025-26' and player=? and team=? and minutes>0", (teammate, team))}
+    if len(tm_games) < 5:
+        return None
+    w = [(m, sum(f(s, k) for k in keys)) for gid, t, m, s in mine if t == team and m >= 15 and gid in tm_games]
+    wo = [(m, sum(f(s, k) for k in keys)) for gid, t, m, s in mine if t == team and m >= 15 and gid not in tm_games]
+    hit = lambda X: (sum((v > line) if side == "over" else (v < line) for _, v in X), len(X))
+    avg = lambda X, i: st.mean(x[i] for x in X) if X else 0
+    return dict(with_=hit(w), without=hit(wo), w_avg=avg(w, 1), wo_avg=avg(wo, 1), w_min=avg(w, 0), wo_min=avg(wo, 0),
+                w_pm=(sum(v for _, v in w) / sum(m for m, _ in w)) if w else None, wo_pm=(sum(v for _, v in wo) / sum(m for m, _ in wo)) if wo else None)
+
+
+def card(player, stat, line=None, side="over", opp=None, without=None):
     keys = KEYS[stat]
     T = teams(); ab = {v[0]: k for k, v in T.items()}
     pp = pp_line(player, stat)
@@ -184,14 +203,38 @@ def card(player, stat, line=None, side="over", opp=None):
         if r_all[0]:
             print("  DEFENSE       %s vs %ss, %s allowed: season #%d (%.1f) | last 10 #%d | last 5 #%d of 30 (1 = allows most) -- context, not a reason"
                   % (opp, mypos, stat, r_all[0], r_all[1], r10[0], r5[0]))
-    # injuries
+    # injuries + teammate on/off (10/20: the role-change edge -- his numbers WITHOUT the teammate who's out)
     inj = get("https://site.api.espn.com/apis/site/v2/sports/basketball/nba/injuries", "injuries.json", 1)
+    out_mates = list(without or [])
     for t in inj.get("injuries", []):
         nm = t.get("displayName", "")
         if team and T.get(team, (0, ""))[1] == nm or opp and T.get(opp, (0, ""))[1] == nm:
             for i in t.get("injuries", []):
                 if i.get("status") in ("Out", "Day-To-Day", "Doubtful", "Questionable"):
                     print("  INJURY        %-22s %-24s %s" % (nm, i["athlete"]["displayName"], i.get("status")))
+                    if team and T.get(team, (0, ""))[1] == nm and i["athlete"]["displayName"] != player:
+                        out_mates.append(i["athlete"]["displayName"])
+    best_wo = None
+    for mate in dict.fromkeys(out_mates):
+        oo = onoff(db, player, mate, keys, line, side)
+        if not oo:
+            continue
+        print("  WITHOUT       %-22s with him %s avg %.1f in %.0f min | WITHOUT him %s avg %.1f in %.0f min"
+              % (mate, fmt(oo["with_"]), oo["w_avg"], oo["w_min"], fmt(oo["without"]), oo["wo_avg"], oo["wo_min"]))
+        if oo["without"][1] >= 5 and (best_wo is None or oo["without"][1] > best_wo[1]["without"][1]):
+            best_wo = (mate, oo)
+    # projection: minutes x per-minute rate (this season's regular-season minutes once 3+ games exist, else last season's last 20)
+    proj = None
+    if vals:
+        mins = [r["min"] for r in reg] if len(reg) >= 3 else [x[2] for x in last[-20:]]
+        pm = sum(x[3] for x in last) / sum(x[2] for x in last)
+        pmin = st.mean(mins)
+        why = "%.1f min x %.3f/min" % (pmin, pm)
+        if best_wo and best_wo[1]["wo_pm"]:
+            pm = best_wo[1]["wo_pm"]; pmin = max(pmin, best_wo[1]["wo_min"]); why = "%.1f min x %.3f/min WITHOUT %s" % (pmin, pm, best_wo[0])
+        proj = pm * pmin
+        call = "HIGHER" if proj > line else "LOWER"
+        print("  PROJECTION    %.1f (%s) vs line %g -> %s%s" % (proj, why, line, call, "" if (call == "HIGHER") == (side == "over") else "  [DISAGREES WITH YOUR SIDE]"))
     # line history
     try:
         h = sqlite3.connect("lines.db", timeout=60).execute("select line, first_seen from pp where league=7 and kind='standard' and player=? and stat=? order by first_seen", (player, stat)).fetchall()
@@ -216,6 +259,8 @@ def card(player, stat, line=None, side="over", opp=None):
 
 if __name__ == "__main__":
     a = sys.argv[1:]
-    opp = a[a.index("--opp") + 1] if "--opp" in a else None
-    a = [x for i, x in enumerate(a) if x != "--opp" and (i == 0 or a[i - 1] != "--opp")]
-    card(a[0], a[1], float(a[2]) if len(a) > 2 and a[2].replace(".", "").isdigit() else None, a[3] if len(a) > 3 else "over", opp)
+    opt = lambda k: a[a.index(k) + 1] if k in a else None
+    opp, wo = opt("--opp"), opt("--without")
+    a = [x for i, x in enumerate(a) if x not in ("--opp", "--without") and (i == 0 or a[i - 1] not in ("--opp", "--without"))]
+    card(a[0], a[1], float(a[2]) if len(a) > 2 and a[2].replace(".", "").isdigit() else None, a[3] if len(a) > 3 else "over", opp,
+         [w.strip() for w in wo.split(",")] if wo else None)
