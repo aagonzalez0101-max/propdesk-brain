@@ -89,7 +89,9 @@ try:
     _SMAP5 = {"Rush Yards": "rushing yards", "Pass Yards": "passing yards"}
     _SH5 = collections.defaultdict(list)
     for _bk, _pl, _st, _ln, _po, _ts in _sq5.connect("lines.db", timeout=60).execute(
-            "select book, player, stat, line, p_over, ts from sharp where sport='CFB' and ts >= ?", ((datetime.datetime.now(CT) - datetime.timedelta(days=2)).isoformat()[:10],)):
+            "select book, player, stat, line, p_over, ts from sharp where sport='CFB' and ts >= ?", ((datetime.datetime.now(CT) - datetime.timedelta(hours=12)).isoformat()[:16],)):
+        # 10/20 BUG FIX: the 2-day window let LAST week's FanDuel ladders price THIS week's PP lines (Sheppard U116.5 read 80%; this week's
+        # ladder has his middle at 119.5 = 48%). Sharp rows must be <12h old; no fresh row = no leg.
         _SH5[(M.norm(_pl), _st.lower())].append((_ts, float(_ln), float(_po)))
     _QB5 = set()
     for _pl5, _js5 in _sq5.connect("sports.db").execute("select player, stats from player_games where sport='CFB' and date >= '2026-08-01'"):
