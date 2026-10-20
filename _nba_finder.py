@@ -39,7 +39,14 @@ def get(url, cache=None, hours=6):
         f = os.path.join(CACHE, cache)
         if os.path.exists(f) and (datetime.datetime.now().timestamp() - os.path.getmtime(f)) < hours * 3600:
             return json.load(open(f, encoding="utf-8"))
-    d = json.load(urllib.request.urlopen(urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"}), timeout=40))
+    d = None
+    for w in (0, 20, 45, 90):                                    # PrizePicks 429s under load -- back off instead of crashing
+        try:
+            import time; time.sleep(w)
+            d = json.load(urllib.request.urlopen(urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"}), timeout=40)); break
+        except Exception as e:
+            if w == 90:
+                raise
     if cache:
         json.dump(d, open(os.path.join(CACHE, cache), "w", encoding="utf-8"))
     return d

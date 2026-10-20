@@ -26,9 +26,13 @@ def board(lg):
             out = {}
             for p in d["data"]:
                 a = p["attributes"]
+                pl = P.get(p["relationships"]["new_player"]["data"]["id"], {})
+                if a.get("is_promo"):                                   # promos / tacos / free squares ride the same fetch
+                    out["PROMO|%s|%s|%s" % (LEAGUES[lg], pl.get("name"), a["stat_type"])] = "%s -> %s (%s) %s" % (
+                        a["line_score"], a.get("flash_sale_line_score"), a.get("discount_name"),
+                        datetime.datetime.fromisoformat(a["start_time"]).astimezone(CT).strftime("%a %I:%M%p"))
                 if a.get("odds_type") != "standard":
                     continue
-                pl = P.get(p["relationships"]["new_player"]["data"]["id"], {})
                 out["%s|%s|%s" % (LEAGUES[lg], pl.get("name"), a["stat_type"])] = float(a["line_score"])
             return out
         except Exception:
@@ -70,6 +74,10 @@ def one_pass():
         new.update(b); time.sleep(6)
     mine = open_legs(); alerts = []
     for k, ln in new.items():
+        if k.startswith("PROMO|"):
+            if k not in old:
+                alerts.append("NEW PROMO %s %s %s: %s" % (*k.split("|")[1:], ln))
+            continue
         if k in old and old[k] != ln:
             lgname, pl, stat = k.split("|")
             mv = ln - old[k]; pct = abs(mv) / max(old[k], 1)
@@ -78,10 +86,12 @@ def one_pass():
             elif pct >= 0.10:
                 alerts.append("BIG MOVE %s %s %s: %g -> %g (%+.0f%%)" % (lgname, pl, stat, old[k], ln, 100 * mv / max(old[k], 1)))
     for k in old:
+        if k.startswith("PROMO|"):
+            continue
         lgname = k.split("|")[0]
         if k not in new and lgname not in failed and norm(k.split("|")[1]) in mine:
             alerts.append("YOUR LEG PULLED %s" % k.replace("|", " "))
-    keep = {k: v for k, v in old.items() if k.split("|")[0] in failed}        # keep last known lines for leagues that failed to load
+    keep = {k: v for k, v in old.items() if k.split("|")[0] in failed or (k.startswith("PROMO|") and k.split("|")[1] in failed)}   # keep last known lines for leagues that failed to load
     keep.update(new)
     os.makedirs("data", exist_ok=True)
     json.dump(keep, open(SNAP, "w", encoding="utf-8"))

@@ -107,10 +107,17 @@ def board(day=None):
     except Exception as e:
         print("pinnacle:", e)
     SD = spreads()
-    d = F.g("https://partner-api.prizepicks.com/projections?league_id=7&per_page=1000")
-    if not d:
-        import urllib.request
-        d = json.load(urllib.request.urlopen(urllib.request.Request("https://partner-api.prizepicks.com/projections?league_id=7&per_page=1000", headers={"User-Agent": "Mozilla/5.0"}), timeout=40))
+    import urllib.request, time
+    d = None
+    for w in (0, 20, 45, 90):                                    # PP 429s when the watchers poll too -- back off, never fake an empty board
+        time.sleep(w)
+        try:
+            d = json.load(urllib.request.urlopen(urllib.request.Request("https://partner-api.prizepicks.com/projections?league_id=7&per_page=1000",
+                                                                        headers={"User-Agent": "Mozilla/5.0"}), timeout=40)); break
+        except Exception as e:
+            print("PrizePicks retry:", e)
+    if d is None:
+        print("PrizePicks board unavailable -- try again in a few minutes"); return []
     PL = {x["id"]: x["attributes"] for x in d.get("included", []) if x["type"] == "new_player"}
     std = {}; rows = []
     for p in d["data"]:
