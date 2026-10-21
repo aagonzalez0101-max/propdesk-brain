@@ -85,14 +85,14 @@ def fair_over(pn, stat, line, alt, main, pin, SD):
         if pt == line:
             out["fanduel"] = p0
         elif abs(pt - line) <= 0.75 * sd:
-            mu = pt + sd * N.inv_cdf(min(.98, max(.02, p0))); out["fanduel"] = 1 - N.cdf((line - mu) / sd)
+            mu = pt + sd * N.inv_cdf(min(.98, max(.02, p0))); out["fanduel~"] = 1 - N.cdf((line - mu) / sd)   # ~ = moved, not a real price
     P = pin.get((pn, stat))
     if P:
         l0, p0 = min(P, key=lambda r: abs(r[0] - line)); sd = SD.get((pn, stat), (max(1.0, 0.25 * line), []))[0] or 1
         if l0 == line:
             out["pinnacle"] = p0
         elif abs(l0 - line) <= 0.75 * sd:
-            mu = l0 + sd * N.inv_cdf(min(.98, max(.02, p0))); out["pinnacle"] = 1 - N.cdf((line - mu) / sd)
+            mu = l0 + sd * N.inv_cdf(min(.98, max(.02, p0))); out["pinnacle~"] = 1 - N.cdf((line - mu) / sd)
     return out
 
 
@@ -149,7 +149,8 @@ def board(day=None):
     print("\nSTANDARD lines, best side (BET >= 57.7%):")
     for f_, side, r in std_rows[:20]:
         o = rate(r["own"], r["line"], side)
-        print("  %s %3.0f%% %-5s %-24s %-4s %-14s %5g | %s | last season %s | %s %s" % ("BET " if f_ >= 0.577 else "    ", 100 * f_, side, r["player"], r["team"], r["stat"], r["line"],
+        real = [k for k in r["src"] if not k.endswith("~")]                  # 10/21: Beringer "70/70" was two MOVED estimates -- BET needs a real price
+        print("  %s %3.0f%% %-5s %-24s %-4s %-14s %5g | %s | last season %s | %s %s" % ("BET " if f_ >= 0.577 and real else ("est " if f_ >= 0.577 else "    "), 100 * f_, side, r["player"], r["team"], r["stat"], r["line"],
               " ".join("%s %.0f" % (k[:3], 100 * (v if side == "over" else 1 - v)) for k, v in r["src"].items()), ("%.0f%%" % (100 * o)) if o is not None else "--",
               r["t"].strftime("%a %I:%M%p"), "PROMO" if r["promo"] else ""))
     gob = sorted([r for r in rows if r["kind"] == "goblin"], key=lambda r: -r["po"])
