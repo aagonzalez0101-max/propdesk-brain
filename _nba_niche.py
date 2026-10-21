@@ -15,7 +15,8 @@ CT = datetime.timezone(datetime.timedelta(hours=-5))
 CACHE = os.path.join("data", "nba_finder"); os.makedirs(CACHE, exist_ok=True)
 norm = lambda s: re.sub(r"[^a-z]", "", (s or "").lower())
 NICHE = {"FG Made", "FG Attempted", "3-PT Attempted", "Free Throws Made", "Free Throws Attempted", "Personal Fouls", "Turnovers",
-         "Blks+Stls", "Double-Double", "Fantasy Score", "Two Pointers Made", "Two Pointers Attempted", "Steals", "Blocked Shots", "3-PT Made"}
+         "Blks+Stls", "Double-Double", "Fantasy Score", "Two Pointers Made", "Two Pointers Attempted", "Steals", "Blocked Shots", "3-PT Made",
+         "Dunks", "Offensive Rebounds", "Defensive Rebounds"}
 
 
 def get(url, cache=None, hours=12):
@@ -93,14 +94,25 @@ def screen(day=None):
         lines.append((pl.get("name"), pl.get("team"), a.get("description"), a["stat_type"], float(a["line_score"]), t))
     print("NBA niche lines: %d" % len(lines))
     out = []
+    import sqlite3, _nba_finder as NF                         # 10/21: season DB (every game, full box + dunks) replaces the ESPN-log pulls
+    db = sqlite3.connect("sports.db", timeout=60)
     for name, team, opp, stat, ln, t in lines:
-        try:
-            last, pre = logs(name)
-        except Exception:
-            continue
-        v = [value(stat, g) for g in last]; v = [x for x in v if x is not None]
+        B = NF.db_rows(db, name, stat) if stat in NF.BOX or stat == "Dunks" else None
+        if B and B["last"]:
+            v = [x[3] for x in B["last"] if x[2] >= 20]
+            tn = B["tonight"]; role = "START" if tn and tn[0] else ("BENCH" if tn else "?")
+        else:
+            try:
+                last, _ = logs(name)
+            except Exception:
+                continue
+            v = [x for x in (value(stat, g) for g in last) if x is not None]; role = "?"
         if len(v) < 15:
             continue
+        try:
+            _, pre = logs(name)
+        except Exception:
+            pre = []
         vp = [x for x in (value(stat, g) for g in pre) if x is not None]
         for side in ("over", "under"):
             hit = lambda X: sum((x > ln) if side == "over" else (x < ln) for x in X) / len(X) if X else None
@@ -108,11 +120,13 @@ def screen(day=None):
             gap = (avg - ln) / max(ln, 0.5) * (1 if side == "over" else -1)
             if a_ >= 0.68 and b_ >= 0.68:
                 tag = "CRAZY" if a_ >= 0.75 and b_ >= 0.75 and gap >= 0.20 else "LEAN"
-                out.append((min(a_, b_), tag, side, name, team, opp, stat, ln, a_, b_, len(v), avg, hit(vp), [int(x) for x in vp], t))
-    out.sort(key=lambda r: (r[1] != "CRAZY", -r[0]))
+                if role == "BENCH" and side == "over":
+                    tag = "BENCH"                                   # 10/20: Holland DNP / Barnes 9 min -- bench overs are minutes bets
+                out.append((min(a_, b_), tag, side, name, team, opp, stat, ln, a_, b_, len(v), avg, hit(vp), [int(x) for x in vp], t, role))
+    out.sort(key=lambda r: ({"CRAZY": 0, "LEAN": 1, "BENCH": 2}[r[1]], -r[0]))
     for r in out[:30]:
-        print("  %-5s %-5s %-24s %-4s %-22s %5g | season %3.0f%% (n=%d) last20 %3.0f%% avg %.1f | preseason %s %s | vs %s %s"
-              % (r[1], r[2], r[3], r[4], r[6], r[7], 100 * r[8], r[10], 100 * r[9], r[11], ("%.0f%%" % (100 * r[12])) if r[12] is not None else "--", r[13][-5:], r[5], r[14].strftime("%a %I:%M%p")))
+        print("  %-5s %-5s %-24s %-4s %-5s %-22s %5g | season %3.0f%% (n=%d) last20 %3.0f%% avg %.1f | preseason %s %s | vs %s %s"
+              % (r[1], r[2], r[3], r[4], r[15], r[6], r[7], 100 * r[8], r[10], 100 * r[9], r[11], ("%.0f%%" % (100 * r[12])) if r[12] is not None else "--", r[13][-5:], r[5], r[14].strftime("%a %I:%M%p")))
     return out
 
 

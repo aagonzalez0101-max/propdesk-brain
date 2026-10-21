@@ -145,6 +145,46 @@ def dk_fair(team_full, opp_full, player, stat, line, sd):
     return po, (src if po is not None else "no DK line"), gl
 
 
+BOX = {"Points": "pts", "Rebounds": "reb", "Assists": "ast", "3-PT Made": "tpm", "3-PT Attempted": "tpa", "Pts+Rebs+Asts": "pts+reb+ast",
+       "Pts+Rebs": "pts+reb", "Pts+Asts": "pts+ast", "Rebs+Asts": "reb+ast", "Blocked Shots": "blk", "Steals": "stl", "Blks+Stls": "blk+stl",
+       "Turnovers": "tov", "FG Made": "fgm", "FG Attempted": "fga", "Free Throws Made": "ftm", "Free Throws Attempted": "fta",
+       "Offensive Rebounds": "oreb", "Defensive Rebounds": "dreb", "Personal Fouls": "pf", "Two Pointers Made": "fgm-tpm",
+       "Two Pointers Attempted": "fga-tpa", "Fantasy Score": "pts+1.2*reb+1.5*ast+3*blk+3*stl-tov"}
+QTR = {"Points": "pts", "Rebounds": "reb", "Assists": "ast", "Pts+Rebs+Asts": "pts+reb+ast", "Pts+Rebs": "pts+reb", "Pts+Asts": "pts+ast",
+       "Rebs+Asts": "reb+ast", "FG Attempted": "fga", "FG Made": "fgm", "3-PT Attempted": "tpa", "Dunks": "dunks"}
+
+
+def db_rows(db, player, stat):
+    """season DB (nba_box / nba_qtr / nba_lineups): last-season + this-season values, minutes, quarter shares, tonight's role"""
+    out = dict(last=[], mins_last=[], mins_cur=[], qtr=None, tonight=None)
+    try:
+        if stat == "Dunks":
+            rows = db.execute("select b.date, b.opp, b.min, coalesce((select sum(dunks) from nba_qtr q where q.game_id=b.game_id and q.player_id=b.player_id),0), b.starter, b.home "
+                              "from nba_box b join nba_games g on g.game_id=b.game_id where b.player=? and g.stype in ('regular','post','play-in') order by b.date", (player,)).fetchall()
+        elif stat in BOX:
+            rows = db.execute("select b.date, b.opp, b.min, %s, b.starter, b.home from nba_box b join nba_games g on g.game_id=b.game_id "
+                              "where b.player=? and g.stype in ('regular','post','play-in') order by b.date" % BOX[stat], (player,)).fetchall()
+        else:
+            return out
+        out["last"] = [(d, o, m, float(v or 0), s, h) for d, o, m, v, s, h in rows if d >= "2025-10-01" and d < "2026-08-01" and (m or 0) >= 15]
+        out["mins_last"] = [m for d, o, m, v, s, h in rows if "2025-10-01" <= d < "2026-08-01" and (m or 0) > 0]
+        out["mins_cur"] = [m for d, o, m, v, s, h in rows if d >= "2026-10-01"]
+        if stat in QTR:
+            qx = re.sub(r"\b(pts|reb|ast|fga|fgm|tpa|dunks)\b", r"q.\1", QTR[stat])
+            q = db.execute("select avg(case when q.period=1 then " + qx + " end), avg(h.v), avg(f.v) from nba_box b "
+                           "join nba_qtr q on q.game_id=b.game_id and q.player_id=b.player_id "
+                           "join (select game_id, player_id, sum(%s) v from nba_qtr where period<=2 group by 1,2) h on h.game_id=b.game_id and h.player_id=b.player_id "
+                           "join (select game_id, player_id, sum(%s) v from nba_qtr group by 1,2) f on f.game_id=b.game_id and f.player_id=b.player_id "
+                           "where b.player=? and b.min>=15" % (QTR[stat], QTR[stat]), (player,)).fetchone()
+            if q and q[2]:
+                out["qtr"] = q
+        tn = db.execute("select starter, pct from nba_lineups where player=? order by date desc limit 1", (player,)).fetchone()
+        out["tonight"] = tn
+    except Exception as e:
+        print("  (season DB: %s)" % e)
+    return out
+
+
 def onoff(db, player, teammate, keys, line, side):
     """his 2025-26 numbers in games WITH vs WITHOUT a teammate (same team, he played 15+ min). None when they weren't teammates."""
     f = lambda s, k: float(s.get(k) or 0)
@@ -180,7 +220,11 @@ def card(player, stat, line=None, side="over", opp=None, without=None):
     R = [(d, o, m or 0, json.loads(s), h) for d, o, m, s, h in db.execute(
         "select date, opp, minutes, stats, home from player_games where sport='NBA' and player=? and season in ('2024-25','2025-26') order by date", (player,))]
     last = [(d, ab.get(o, o), m, sum(f(s, k) for k in keys), s.get("starter"), h) for d, o, m, s, h in R if d >= "2025-10-01" and m >= 15]
-    cur = season_logs(player, keys)
+    # 10/21: the season database (nba_box/nba_qtr, every game incl. this season) replaces player_games when it has the player
+    B = db_rows(db, player, stat)
+    if B["last"]:
+        last = B["last"]
+    cur = season_logs(player, keys) if stat in KEYS and all(k in ESPN_KEYS for k in keys) else []
     reg = [r for r in cur if not r["pre"]]; pre = [r for r in cur if r["pre"]]
     vals = [x[3] for x in last]
     print("  THIS SEASON   regular %s | preseason %s %s" % (fmt(hit([r["v"] for r in reg])), fmt(hit([r["v"] for r in pre])),
@@ -190,10 +234,19 @@ def card(player, stat, line=None, side="over", opp=None, without=None):
         print("  LAST SEASON   %s avg %.1f | last 20 %s | last 10 %s | last 5 %s" % (fmt(hit(vals)), st.mean(vals), fmt(hit(vals[-20:])), fmt(hit(vals[-10:])), fmt(hit(vals[-5:]))))
         print("  SPLITS        starter %s | bench %s | 30+ min %s | under 30 min %s" % (fmt(hit([x[3] for x in last if x[4]])), fmt(hit([x[3] for x in last if not x[4]])),
               fmt(hit([x[3] for x in last if x[2] >= 30])), fmt(hit([x[3] for x in last if x[2] < 30]))))
-        h2h = [x for x in [(d, ab.get(o, o), m, sum(f(s, k) for k in keys)) for d, o, m, s, h in R if m >= 15] if x[1] == opp]
+        h2h = [x for x in [(d, ab.get(o, o), m, sum(f(s, k) for k in keys)) for d, o, m, s, h in R if m >= 15] if x[1] == opp] if not B["last"] else [x for x in B["last"] if x[1] == opp]
         print("  HEAD-TO-HEAD  vs %s (2 seasons) %s %s" % (opp, fmt(hit([x[3] for x in h2h])), [int(x[3]) for x in h2h][-6:]))
     else:
         sd = max(1.0, 0.25 * line); print("  LAST SEASON   no 2025-26 games (rookie or new)")
+    # minutes + tonight's role (season DB + RotoWire) -- 10/20: Holland DNP, Barnes 9 min, Pritchard 28 min were all minutes misses
+    if B["mins_last"]:
+        tn = B["tonight"]
+        print("  MINUTES       last season avg %.1f | last 10 %.1f | this season %s | TONIGHT %s"
+              % (st.mean(B["mins_last"]), st.mean(B["mins_last"][-10:]), [int(m) for m in B["mins_cur"]] or "--",
+                 ("STARTER (%s%%)" % tn[1] if tn and tn[0] else ("BENCH -- minutes risk (%s%% to play)" % tn[1] if tn else "not on RotoWire yet"))))
+    if B["qtr"]:
+        q1, h1, full = B["qtr"]
+        print("  QUARTERS      1Q avg %.1f (%.0f%% of game) | 1H avg %.1f (%.0f%%) | full %.1f  -- for 1Q/1H lines" % (q1, 100 * q1 / max(full, 0.1), h1, 100 * h1 / max(full, 0.1), full))
     # defense vs position
     pos = positions(); mypos = pos.get(norm(player), "?")
     if opp in T and mypos != "?":
