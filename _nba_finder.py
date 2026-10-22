@@ -22,7 +22,7 @@ N = NormalDist()
 CT = datetime.timezone(datetime.timedelta(hours=-5))
 CACHE = os.path.join("data", "nba_finder")
 os.makedirs(CACHE, exist_ok=True)
-norm = lambda s: re.sub(r"[^a-z]", "", (s or "").lower())
+norm = lambda s: re.sub(r"[^a-z]", "", __import__("unicodedata").normalize("NFKD", s or "").encode("ascii", "ignore").decode().lower())   # 10/21: "Dončić" was "doni"
 KEYS = {"Points": ("pts",), "Rebounds": ("reb",), "Assists": ("ast",), "3-PT Made": ("tpm",), "Pts+Rebs+Asts": ("pts", "reb", "ast"),
         "Pts+Rebs": ("pts", "reb"), "Pts+Asts": ("pts", "ast"), "Rebs+Asts": ("reb", "ast"), "Blocked Shots": ("blk",), "Steals": ("stl",),
         "Blks+Stls": ("blk", "stl"), "Turnovers": ("to",)}
@@ -154,6 +154,40 @@ QTR = {"Points": "pts", "Rebounds": "reb", "Assists": "ast", "Pts+Rebs+Asts": "p
        "Rebs+Asts": "reb+ast", "FG Attempted": "fga", "FG Made": "fgm", "3-PT Attempted": "tpa", "Dunks": "dunks"}
 
 
+def roster_change(db, player, stat, line, side="over"):
+    """10/21 (Nembhard 75% last season = Haliburton OUT all year; with Haliburton in 2024-25 he was 27%). A teammate playing tonight who
+    missed most of 2025-26 makes last season's rate the wrong sample -> re-grade the line on 2024-25 games they BOTH played.
+    Returns [(teammate, n, rate, avg)]; rate is None when they never shared a game (role unmeasured)."""
+    if stat not in BOX:
+        return []
+    try:
+        tm = db.execute("select team from nba_box where player=? and min>0 order by date desc limit 1", (player,)).fetchone()
+        day = db.execute("select max(date) from nba_lineups").fetchone()[0]
+        if not tm or not day:
+            return []
+        ALIAS = {"NY": "NYK", "GS": "GSW", "SA": "SAS", "NO": "NOP", "UTAH": "UTA", "WSH": "WAS"}
+        mates = [r[0] for r in db.execute("select player from nba_lineups where date=? and team in (?,?) and pct>=50 and player!=?",
+                                          (day, tm[0], ALIAS.get(tm[0], tm[0]), player))]
+        out = []
+        for m in mates:
+            # 10/21: SHARED games last season, not his own games -- Dame played all year for MIL, but never next to Morant
+            n26 = db.execute("select count(*) from nba_box b join nba_box t on t.game_id=b.game_id and t.player like ? and t.min>0 and t.team=b.team "
+                             "where b.player=? and b.min>0 and b.date between '2025-10-01' and '2026-08-01'", (m + "%", player)).fetchone()[0]   # RotoWire drops Jr./III
+            if n26 >= 15:
+                continue                                             # they were already in last season's sample together
+            both = db.execute("select %s from nba_box b join nba_box t on t.game_id=b.game_id and t.player like ? and t.min>0 and t.team=b.team "
+                              "where b.player=? and b.min>=15 and b.date between '2024-10-01' and '2025-08-01'" % re.sub(r"\b([a-z]+)\b", r"b.\1", BOX[stat]),
+                              (m + "%", player)).fetchall()
+            v = [float(x[0] or 0) for x in both]
+            d = [x for x in v if x != line]
+            rate = (sum((x > line) if side == "over" else (x < line) for x in d) / len(d)) if len(d) >= 5 else None
+            out.append((m, len(v), rate, st.mean(v) if v else None))
+        return out
+    except Exception as e:
+        print("  (roster check: %s)" % e)
+        return []
+
+
 def db_rows(db, player, stat):
     """season DB (nba_box / nba_qtr / nba_lineups): last-season + this-season values, minutes, quarter shares, tonight's role"""
     out = dict(last=[], mins_last=[], mins_cur=[], qtr=None, tonight=None)
@@ -167,6 +201,7 @@ def db_rows(db, player, stat):
         else:
             return out
         out["last"] = [(d, o, m, float(v or 0), s, h) for d, o, m, v, s, h in rows if d >= "2025-10-01" and d < "2026-08-01" and (m or 0) >= 15]
+        out["prev"] = [(d, o, m, float(v or 0), s, h) for d, o, m, v, s, h in rows if "2024-10-01" <= d < "2025-08-01" and (m or 0) >= 15]   # 10/21: 2024-25 for players who lost 2025-26 (Haliburton)
         out["mins_last"] = [m for d, o, m, v, s, h in rows if "2025-10-01" <= d < "2026-08-01" and (m or 0) > 0]
         out["mins_cur"] = [m for d, o, m, v, s, h in rows if d >= "2026-10-01"]
         if stat in QTR:
@@ -313,6 +348,15 @@ def card(player, stat, line=None, side="over", opp=None, without=None):
     s_rate = hit(vals) if vals else (0, 0)
     ok_rate = s_rate[1] and s_rate[0] / s_rate[1] >= 0.55
     verdict = "BET" if fair is not None and fair >= 0.577 and ok_rate else ("LEAN" if fair is not None and fair >= 0.55 else "PASS")
+    for m, n, r, avg in roster_change(sqlite3.connect("sports.db", timeout=60), player, stat, line, side):
+        if r is None:
+            print("  ROSTER        %s is new to his lineup (not in the 2025-26 sample), %d shared games -> role UNMEASURED" % (m, n))
+            verdict = "LEAN" if verdict == "BET" else verdict
+        else:
+            print("  ROSTER        %s is new to his lineup (missed 2025-26): with him in 2024-25 %s %g %.0f%% (n=%d, avg %.1f)%s"
+                  % (m, side, line, 100 * r, n, avg, "  <- last season's rate is the WRONG sample" if r < 0.55 else ""))
+            if r < 0.55:
+                verdict = "PASS"
     print("  VERDICT       %s" % verdict)
     return dict(player=player, stat=stat, line=line, side=side, fair=fair, verdict=verdict)
 

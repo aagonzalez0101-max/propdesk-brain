@@ -21,7 +21,7 @@ UA = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/124", "Acc
 PH = dict(UA, **{"X-API-Key": PIN_KEY})
 CT = datetime.timezone(datetime.timedelta(hours=-5))
 OUT = "props_paper.jsonl"
-norm = lambda s: re.sub(r"[^a-z0-9]", "", (s or "").lower())
+norm = lambda s: re.sub(r"[^a-z0-9]", "", __import__("unicodedata").normalize("NFKD", s or "").encode("ascii", "ignore").decode().lower())   # 10/21: accents (Dončić) broke matching
 dec = lambda o: 1 + (o / 100 if o > 0 else 100 / -o)
 imp = lambda o: 1 / dec(o)
 UD2_BE = 1 / 3.5 ** 0.5          # 53.5% per leg, Underdog 2-pick 3.5x (confirmed)

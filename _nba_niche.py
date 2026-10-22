@@ -13,7 +13,7 @@ import sys, json, re, os, time, datetime, urllib.request, statistics as st
 
 CT = datetime.timezone(datetime.timedelta(hours=-5))
 CACHE = os.path.join("data", "nba_finder"); os.makedirs(CACHE, exist_ok=True)
-norm = lambda s: re.sub(r"[^a-z]", "", (s or "").lower())
+norm = lambda s: re.sub(r"[^a-z]", "", __import__("unicodedata").normalize("NFKD", s or "").encode("ascii", "ignore").decode().lower())   # 10/21: "Dončić" was "doni"
 NICHE = {"FG Made", "FG Attempted", "3-PT Attempted", "Free Throws Made", "Free Throws Attempted", "Personal Fouls", "Turnovers",
          "Blks+Stls", "Double-Double", "Fantasy Score", "Two Pointers Made", "Two Pointers Attempted", "Steals", "Blocked Shots", "3-PT Made",
          "Dunks", "Offensive Rebounds", "Defensive Rebounds"}
@@ -100,6 +100,8 @@ def screen(day=None):
         B = NF.db_rows(db, name, stat) if stat in NF.BOX or stat == "Dunks" else None
         if B and B["last"]:
             v = [x[3] for x in B["last"] if x[2] >= 20]
+            if len(v) < 15 and len([x for x in B.get("prev", []) if x[2] >= 20]) >= 15:
+                v = [x[3] for x in B["prev"] if x[2] >= 20]             # 10/21: missed 2025-26 (Haliburton) -> his last full season, 2024-25
             tn = B["tonight"]; role = "START" if tn and tn[0] else ("BENCH" if tn else "?")
         else:
             try:
@@ -109,19 +111,26 @@ def screen(day=None):
             v = [x for x in (value(stat, g) for g in last) if x is not None]; role = "?"
         if len(v) < 15:
             continue
-        try:
-            _, pre = logs(name)
-        except Exception:
-            pre = []
-        vp = [x for x in (value(stat, g) for g in pre) if x is not None]
+        vp = None
         for side in ("over", "under"):
-            hit = lambda X: sum((x > ln) if side == "over" else (x < ln) for x in X) / len(X) if X else None
+            # 10/21: whole-number lines PUSH on the number (PP drops the leg) -- rate over decided games, not all games
+            # (Jalen Smith 3PA O4: 14 of 53 games landed on exactly 4 and were counted as losses)
+            hit = lambda X: (lambda D: sum((x > ln) if side == "over" else (x < ln) for x in D) / len(D) if D else None)([x for x in X if x != ln])
             a_, b_ = hit(v), hit(v[-20:]); avg = st.mean(v)
             gap = (avg - ln) / max(ln, 0.5) * (1 if side == "over" else -1)
             if a_ >= 0.68 and b_ >= 0.68:
+                if vp is None:                                      # 10/21: preseason (ESPN) only for qualifying lines -- pulling it for all ~400 took 2+ hours
+                    try:
+                        _, pre = logs(name)
+                    except Exception:
+                        pre = []
+                    vp = [x for x in (value(stat, g) for g in pre) if x is not None]
                 tag = "CRAZY" if a_ >= 0.75 and b_ >= 0.75 and gap >= 0.20 else "LEAN"
                 if role == "BENCH" and side == "over":
                     tag = "BENCH"                                   # 10/20: Holland DNP / Barnes 9 min -- bench overs are minutes bets
+                rc = [m for m, n, x, a in NF.roster_change(db, name, stat, ln, side) if x is not None and x < 0.55]
+                if rc:
+                    tag = "BENCH"; name = name + " [ROSTER: %s back]" % ", ".join(rc)   # 10/21 Nembhard/Haliburton: wrong sample -> never CRAZY/LEAN
                 out.append((min(a_, b_), tag, side, name, team, opp, stat, ln, a_, b_, len(v), avg, hit(vp), [int(x) for x in vp], t, role))
     out.sort(key=lambda r: ({"CRAZY": 0, "LEAN": 1, "BENCH": 2}[r[1]], -r[0]))
     for r in out[:30]:

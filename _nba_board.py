@@ -16,7 +16,7 @@ import _fanduel as F, _props as PR
 
 N = NormalDist()
 CT = datetime.timezone(datetime.timedelta(hours=-5))
-norm = lambda s: re.sub(r"[^a-z]", "", (s or "").lower())
+norm = lambda s: re.sub(r"[^a-z]", "", __import__("unicodedata").normalize("NFKD", s or "").encode("ascii", "ignore").decode().lower())   # 10/21: "Dončić" was "doni"
 FD_STAT = {"points": "Points", "rebounds": "Rebounds", "assists": "Assists", "made threes": "3-PT Made", "pts + reb + ast": "Pts+Rebs+Asts",
            "pts + reb": "Pts+Rebs", "pts + ast": "Pts+Asts", "reb + ast": "Rebs+Asts", "steals": "Steals", "blocks": "Blocked Shots"}
 PIN_STAT = {"points": "Points", "rebounds": "Rebounds", "assists": "Assists", "threes made": "3-PT Made", "pts & rebs & asts": "Pts+Rebs+Asts"}
@@ -147,9 +147,16 @@ def board(day=None):
         std_rows.append((f_, side, r))
     std_rows.sort(key=lambda x: -x[0])
     print("\nSTANDARD lines, best side (BET >= 57.7%):")
+    import _nba_finder as NF
+    rdb = sqlite3.connect("sports.db", timeout=60)
     for f_, side, r in std_rows[:20]:
         o = rate(r["own"], r["line"], side)
         real = [k for k in r["src"] if not k.endswith("~")]                  # 10/21: Beringer "70/70" was two MOVED estimates -- BET needs a real price
+        # 10/21: Nembhard 75% last season = Haliburton out all year (27% with him) -> every priced leg gets the roster check
+        rc = NF.roster_change(rdb, r["player"], r["stat"], r["line"], side) if f_ >= 0.577 else []
+        bad = [m for m, n, x, a in rc if x is not None and x < 0.55]
+        if bad:
+            real = []; r["player"] = r["player"] + " [ROSTER: %s back]" % ", ".join(bad)
         print("  %s %3.0f%% %-5s %-24s %-4s %-14s %5g | %s | last season %s | %s %s" % ("BET " if f_ >= 0.577 and real else ("est " if f_ >= 0.577 else "    "), 100 * f_, side, r["player"], r["team"], r["stat"], r["line"],
               " ".join("%s %.0f" % (k[:3], 100 * (v if side == "over" else 1 - v)) for k, v in r["src"].items()), ("%.0f%%" % (100 * o)) if o is not None else "--",
               r["t"].strftime("%a %I:%M%p"), "PROMO" if r["promo"] else ""))

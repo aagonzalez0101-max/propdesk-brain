@@ -11,7 +11,7 @@ import json, re, os, math, time, datetime
 from statistics import NormalDist
 
 N = NormalDist()
-norm = lambda s: re.sub(r"[^a-z0-9]", "", (s or "").lower())
+norm = lambda s: re.sub(r"[^a-z0-9]", "", __import__("unicodedata").normalize("NFKD", s or "").encode("ascii", "ignore").decode().lower())   # 10/21: accents (Dončić) broke matching
 PIN_LEAGUE = {"NFL": 889, "NHL": 1456, "WNBA": 578, "MLB": 246, "CFB": 880, "NBA": 487}
 PP_LEAGUE = {"NFL": 9, "NHL": 8, "WNBA": 3, "MLB": 2, "CFB": 15, "NBA": 7}
 UD_SPORT = {"NFL": "NFL", "NHL": "NHL", "WNBA": "WNBA", "MLB": "MLB", "CFB": "CFB", "NBA": "NBA"}
