@@ -43,6 +43,8 @@ def lines(day, log):
     steps = [
         ("snapshot every board", ["_snap_lines.py"], 900),
         ("capper videos (2eZ + Fantasy Aces)", ["_cappers.py", day], 300),
+        ("NBA paper: every PP standard line + projections (10/22)", ["_nba_paper.py", "log", cday], 900),
+        ("NBA no-bigs dunk screen (10/22)", ["_nba_dunks.py", cday], 300),
         ("NHL props (today)", ["_props.py", "nhl", day], 900),
         ("NHL props (tomorrow)", ["_props.py", "nhl", tomorrow], 900),
         ("WNBA props (today)", ["_bball.py", "screen", "wnba", day], 900),
@@ -134,6 +136,8 @@ def grade(log, part="all"):
         ("NFL: re-test defense-adjusted projections vs raw (turns ON only if proven)", ["_nfl_matchup.py", "test"], 300),
         ("GATE: grade the legs the form/H2H gate dropped (is it saving us?)", ["_gate_grade.py"], 300),
         ("Discord: projection vs actual for yesterday's legs", ["_projcheck.py", "--post"], 600),
+        ("NBA season DB: ingest yesterday's games", ["_nba_season.py", "ingest", (datetime.datetime.now(CT).date() - datetime.timedelta(days=1)).isoformat()], 900),
+        ("NBA paper: grade every logged line + rule report (10/22)", ["_nba_paper.py", "grade"], 600),
     ]
     for label, args, to in steps:
         run(label, args, to, log)
