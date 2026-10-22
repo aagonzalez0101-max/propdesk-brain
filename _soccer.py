@@ -466,7 +466,8 @@ def screen(day):
     have = set()
     if os.path.exists(OUT):
         have = {(x["date"], x["player"], x["stat"], x["line"]) for x in map(json.loads, open(OUT, encoding="utf-8"))}
-    new = [r for r in R if r["verdict"] in ("HIT", "LEAN") and (r["date"], r["player"], r["stat"], r["line"]) not in have]
+    # 10/22 user: "keep doing passes for paper on all soccer instead of just goalies" -> every modelled line is papered (verdict kept on the row)
+    new = [r for r in R if (r["date"], r["player"], r["stat"], r["line"]) not in have]
     with open(OUT, "a", encoding="utf-8") as f:
         for r in new:
             f.write(json.dumps(dict(r, result=None), ensure_ascii=False) + "\n")
