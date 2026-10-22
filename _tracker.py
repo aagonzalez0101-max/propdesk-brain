@@ -1,3 +1,4 @@
+import sys, os
 """ROAD TO $500 TRACKER in Discord (2026-10-10, user: "the tracker is easy to see -- put it in Discord, but no extra channel").
 ONE message in #card that is EDITED in place (webhooks can edit their own messages): he pins it once, it never spams.
     python _tracker.py          # create it the first time, then update it (message id kept in _tracker_msg.json)
@@ -204,6 +205,9 @@ def build():
 
 
 def main():
+    # 10/22 user: no auto updates -- the cloud's scheduled run overwrote the fixed tracker. Posts only when run by hand with --post.
+    if "--post" not in sys.argv or os.environ.get("GITHUB_ACTIONS"):
+        print("tracker: manual only -- run `python _tracker.py --post` from the laptop"); return
     c = json.load(open("notify.json", encoding="utf-8"))
     hook = c.get("tracker_webhook") or c.get("discord_webhook")      # 10/10: its own channel
     if not hook:

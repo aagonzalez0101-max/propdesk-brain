@@ -130,7 +130,7 @@ def grade(log, part="all"):
         ("recalibrate probabilities", ["_calibrate.py"], 120),
         ("recalibrate esports models vs graded results (CS2/VAL/Dota)", ["_calib_es.py"], 300),
         ("experiment replay (one change at a time)", ["_experiments.py", "replay"], 300),
-        ("Discord: update the pinned Road-to-$500 tracker", ["_tracker.py"], 120),
+        # 10/22 user: "turn off the road to 500 auto update" -- the tracker is MANUAL ONLY now (`python _tracker.py --post`)
         ("NFL BETA: grade paper legs when nflverse posts the week", ["_nfl_beta_grade.py"], 300),
         ("SLIPS: grade every logged league slip, bet + paper", ["_paper_slips_grade.py"], 600),
         ("NFL: re-test defense-adjusted projections vs raw (turns ON only if proven)", ["_nfl_matchup.py", "test"], 300),
