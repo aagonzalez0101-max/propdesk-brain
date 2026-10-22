@@ -208,8 +208,9 @@ def push(force=False, cloud=False, _retry=True):
                 elif m.name == "road.json":
                     if cloud:                                       # the laptop owns road.json
                         t.extract(m, ".", filter="data")
-                elif not cloud:                                     # laptop push: everything else = the cloud's newer copy
-                    t.extract(m, ".", filter="data")
+                elif not cloud and not m.name.endswith(".db"):      # laptop push: everything else = the cloud's newer copy
+                    t.extract(m, ".", filter="data")                # 10/22: NOT databases -- the cloud's sports.db replaced ours and wiped
+                                                                    # nba_box/nba_qtr/nba_games/nba_out (2 seasons, rebuilt from data/nba_season/raw)
         os.remove(rp)
         print("merged with the newer remote bundle (%s): bet ledger row-merged" % a["updated_at"])
     bp = "_bundle_%d.tar.gz" % os.getpid()          # never the shared name: a pull writing bundle.tar.gz corrupted an upload on 10/12

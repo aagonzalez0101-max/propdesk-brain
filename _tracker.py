@@ -150,11 +150,14 @@ def render_dashboard(bal, start, goal, day, w, l, stake, op, cash_risk, bonus):
 
 def build():
     R = json.load(open("road.json", encoding="utf-8"))
-    S, G, start = R["start_date"], R["goal"], R["start_roll"] + sum(d["amount"] for d in R.get("deposits", []) if d.get("book") != "DraftKings")   # 10/15 user: DK solo, off the road
+    # 10/22 user: "the start was $40 not $54" -- start = the day-1 roll; top-ups land on their own date in the timeline
+    S, G, start = R["start_date"], R["goal"], R["start_roll"]
+    deps = [d for d in R.get("deposits", []) if d.get("book") != "DraftKings"]   # 10/15 user: DK solo, off the road
     live = [r for r in L if r.get("kind") == "LIVE" and r.get("date", "") >= S and not r.get("exclude") and r.get("book") != "DraftKings"]   # 10/15 user: DK is solo, not on the road
     done = [r for r in live if r.get("result") in ("WIN", "LOSS", "PUSH", "VOID")]
     op = [r for r in live if r.get("result") in (None, "PENDING")]
-    bal = start + sum(r.get("net") or 0 for r in done)
+    added = sum(d["amount"] for d in deps)
+    bal = start + added + sum(r.get("net") or 0 for r in done)
     cash_risk = sum(r.get("stake") or 0 for r in op if r.get("funding") != "bonus")
     bonus = sum(r.get("stake") or 0 for r in op if r.get("funding") == "bonus")
     frac = max(0.0, min(1.0, (bal - start) / (G - start)))
@@ -162,17 +165,30 @@ def build():
     bar = "🟩" * k + "⬛" * (12 - k)
     day = (datetime.datetime.now(CT).date() - datetime.date.fromisoformat(S)).days + 1
     w = sum(r["result"] == "WIN" for r in done); l = sum(r["result"] == "LOSS" for r in done)
-    desc = ["**$%.2f** · day %d · %d-%d · %d open" % (bal, day, w, l, len(op)), ""]
+    profit = bal - start - added
+    desc = ["**$%.2f** · day %d · %d-%d · %d open" % (bal, day, w, l, len(op)),
+            "Started **$%.2f** (%s)%s · betting profit **%+.2f**" % (start, S[5:], (" + $%.2f added" % added) if added else "", profit), ""]
     by = {}
     for r in done:
         by.setdefault(r["date"], []).append(r)
     if by:
         desc.append("**📅 By day**")
-        run = start
-        for d in sorted(by):
-            n = sum(r.get("net") or 0 for r in by[d]); run += n
-            desc.append("`%s`  %d-%d  %+.2f  → $%.2f" % (d[5:], sum(r["result"] == "WIN" for r in by[d]), sum(r["result"] == "LOSS" for r in by[d]), n, run))
+        run, low = start, (start, S)
+        desc.append("`%s`  START  → $%.2f" % (S[5:], start))
+        for d in sorted(set(by) | {x["date"] for x in deps}):
+            g = by.get(d, [])
+            if g:
+                n = sum(r.get("net") or 0 for r in g); run += n
+                desc.append("`%s`  %d-%d  %+.2f  → $%.2f" % (d[5:], sum(r["result"] == "WIN" for r in g), sum(r["result"] == "LOSS" for r in g), n, run))
+                if run < low[0]:
+                    low = (run, d)
+            for x in deps:
+                if x["date"] == d:
+                    run += x["amount"]; desc.append("`%s`  ➕ top-up %+.2f  → $%.2f" % (d[5:], x["amount"], run))
         desc.append("")
+        if low[0] < start:
+            desc.append("📉 Low **$%.2f** (%s) → now **$%.2f** = **%.1fx** off the bottom" % (low[0], low[1][5:], bal, bal / low[0]))
+            desc.append("")
     rows = []
     for t in ("SYSTEM", "PROMO", "OFF"):
         g = [r for r in done if tag(r) == t]
@@ -183,7 +199,7 @@ def build():
         desc.append("**By type:** " + " · ".join(rows))
     return {"title": "🛣️ ROAD TO $%d" % G, "description": "\n".join(desc)[:4000], "color": 0x1ED760 if bal >= start else 0xF3727F,
             "image": {"url": "attachment://road.png"},
-            "_png": render_dashboard(bal, start, G, day, w, l, 0.05 * (start + sum(r.get("net") or 0 for r in done if r["date"] < datetime.datetime.now(CT).date().isoformat())), op, cash_risk, bonus),
+            "_png": render_dashboard(bal, start, G, day, w, l, R.get("stake_pct", 0.1) * (start + sum(x["amount"] for x in deps if x["date"] < datetime.datetime.now(CT).date().isoformat()) + sum(r.get("net") or 0 for r in done if r["date"] < datetime.datetime.now(CT).date().isoformat())), op, cash_risk, bonus),
             "footer": {"text": "PropDesk · updated %s TX · pin this message" % datetime.datetime.now(CT).strftime("%a %m/%d %I:%M %p")}}
 
 
