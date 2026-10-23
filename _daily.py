@@ -45,6 +45,7 @@ def lines(day, log):
         ("capper videos (2eZ + Fantasy Aces)", ["_cappers.py", day], 300),
         ("NBA paper: every PP standard line + projections (10/22)", ["_nba_paper.py", "log", cday], 900),
         ("NBA no-bigs dunk screen (10/22)", ["_nba_dunks.py", cday], 300),
+        ("NBA VALUE finder: context the line didn't price (10/23)", ["_nba_value.py", cday], 600),
         ("NHL props (today)", ["_props.py", "nhl", day], 900),
         ("NHL props (tomorrow)", ["_props.py", "nhl", tomorrow], 900),
         ("WNBA props (today)", ["_bball.py", "screen", "wnba", day], 900),
@@ -141,6 +142,7 @@ def grade(log, part="all"):
         ("NBA play-by-play: parse new games into shot types / passers / events (10/23)", ["_nba_pbp.py", "build"], 900),
         ("NBA lineups: who was on the floor + small-ball stints (10/23)", ["_nba_lineups.py", "build"], 900),
         ("NBA paper: grade every logged line + rule report (10/22)", ["_nba_paper.py", "grade"], 600),
+        ("NBA VALUE finder: grade (10/23)", ["_nba_value.py", "grade"], 300),
     ]
     for label, args, to in steps:
         run(label, args, to, log)
