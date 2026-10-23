@@ -48,6 +48,21 @@ def dig(day=None):
             pace[t_] = st.mean(v_)
     vals = sorted(pace.values()); lo_p, hi_p = (vals[len(vals) // 3], vals[2 * len(vals) // 3]) if vals else (0, 0)
     tier = lambda t: "" if t not in pace else ("FAST" if pace[t] >= hi_p else ("SLOW" if pace[t] <= lo_p else ""))
+    # 10/23 lineups (_nba_lineups.py): how often each opponent plays SMALL (no real big on the floor), and each player's own per-36
+    # vs small lineups (league-wide bigs only +0.5 reb/36, but player-specific swings are big -- Edey +2.6 reb/36, n=17 games).
+    small_share = {}
+    try:
+        for t_, sm_, tot_ in db.execute("select team, sum(case when small=1 then t1-t0 else 0 end), sum(t1-t0) from nba_stints where season in ('2025-26','2026-27') group by team"):
+            small_share[t_] = sm_ / tot_ if tot_ else 0
+    except Exception:
+        pass
+    def vs_small(nm_):
+        r_ = {o_: db.execute("select sum(secs), sum(reb), sum(pts) from nba_stint_stats where player=? and opp_small=?", (nm_, o_)).fetchone() for o_ in (0, 1)}
+        if not r_[0][0] or not r_[1][0] or r_[1][0] < 6000:
+            return ""
+        f_ = lambda x: (2160 * x[1] / x[0], 2160 * x[2] / x[0])
+        (rn, pn), (rs, ps) = f_(r_[0]), f_(r_[1])
+        return "  [vs small: reb/36 %+.1f, pts/36 %+.1f]" % (rs - rn, ps - pn)
     out = []
     for (nm, tm, opp), L in lines.items():
         # 10/22 fix: preseason minutes are CAPPED for stars (Mitchell/Murray/SGA ~22) -> regular-season minutes first
@@ -92,7 +107,7 @@ def dig(day=None):
     print("MINUTES DIG %s -- lines where his games at TONIGHT's minutes (current team) clear the bar (std 70%%, demon 55%%, goblin 85%%)" % day)
     for r, nm, tm, opp, stat, kind, side, ln, n, em, pj, th, hh, rt, rh in out:
         print("  %-8s %-22s %-4s v %-4s %-20s %-5s %5g | at ~%.0f min: %3.0f%% (n=%d) | proj %.1f | 2026 %s | h2h %s%s"
-              % (kind.upper(), nm[:22], tm, opp, stat[:20], side, ln, em, 100 * r, n, pj, th, hh, ("  [OPP NO BIG]" if opp in nobig else "") + ("  [OPP %s pace]" % tier(opp) if tier(opp) else "")))
+              % (kind.upper(), nm[:22], tm, opp, stat[:20], side, ln, em, 100 * r, n, pj, th, hh, ("  [OPP NO BIG]" if opp in nobig else "") + ("  [OPP %s pace]" % tier(opp) if tier(opp) else "") + (("  [OPP SMALL %.0f%% of min]" % (100 * small_share[opp]) + vs_small(nm)) if small_share.get(opp, 0) >= .6 else "")))
     return out
 
 
