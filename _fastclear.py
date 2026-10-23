@@ -48,10 +48,17 @@ def one_pass():
         s, l20 = rate(v), rate(v[-20:])
         if s < .70 or l20 < .80:
             continue
-        cur = [r[0] for r in db.execute("select %s from nba_box where player=? and date >= '2026-10-01' and min >= 15 order by date"
-                                        % NF.BOX[stat], (name,))]
+        # 10/23 Tre Jones bug: min>=15 hid his 13/14-min 2026 games (16.6, 17.9 under 18.5) and the projection was last season's
+        # STARTER role (28 min -> FS 32.6) while he now plays 13-17 off the bench. Every 2026 game counts; role must still be the same.
+        C = db.execute("select %s, min from nba_box where player=? and date >= '2026-10-01' and min > 0 order by date" % NF.BOX[stat], (name,)).fetchall()
+        cur = [r[0] for r in C]
         if cur and not all((x > ln) if side == "over" else (x < ln) for x in cur):
             continue
+        reg = [r[0] for r in db.execute("select b.min from nba_box b join nba_games g using(game_id) where b.player=? and b.date >= '2026-10-01' "
+                                        "and b.min > 0 and g.stype='regular' order by b.date", (name,))]
+        now_min = reg[-3:] or [r[1] for r in C[-3:]]          # preseason minutes are capped -- regular season first
+        if now_min and st.mean(now_min) < 0.8 * st.mean(R["mins_last"] or [0]):
+            continue                                         # role shrank this season: last season's numbers don't apply
         last_team = db.execute("select team from nba_box where player=? and min>0 and date between '2025-10-01' and '2026-08-01' order by date desc limit 1", (name,)).fetchone()
         now_team = db.execute("select team from nba_box where player=? and min>0 and date >= '2026-10-01' order by date desc limit 1", (name,)).fetchone()
         if last_team and now_team and last_team[0] != now_team[0]:
