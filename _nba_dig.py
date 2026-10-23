@@ -27,6 +27,16 @@ def dig(day=None):
         pl = P.get(p["relationships"]["new_player"]["data"]["id"], {}); nm = names.get(B.norm(pl.get("name")))
         if nm and "+" not in (pl.get("name") or ""):
             lines[(nm, ESPN.get(pl.get("team"), pl.get("team")), ESPN.get(a.get("description"), a.get("description")))].append((a["stat_type"], a["odds_type"], float(a["line_score"])))
+    # 10/23 (user found Edey P+R vs a GSW team with no center): opponents whose last starting five had NO real big (reb/36 >= 9.5).
+    # Measured 2 seasons: bigs vs those lineups +0.63 reb/36 (t=4.9, n=1,308); no points lift. Flag it + lift big-man rebound projections.
+    import _nba_dunks as DK
+    PR = DK.season_profiles(db); nobig = set()
+    for t_, d_ in db.execute("select b.team, max(b.date) from nba_box b join nba_games g using(game_id) where g.season='2026-27' and g.stype='regular' group by b.team"):
+        st5 = [r[0] for r in db.execute("select player from nba_box where team=? and date=? and starter=1", (t_, d_))]
+        if st5 and not any(DK.is_big(PR.get(("2025-26", p_))) or DK.is_big(PR.get(("2024-25", p_))) for p_ in st5):
+            nobig.add(t_)
+    if nobig:
+        print("OPPONENTS STARTING NO REAL BIG (bigs vs them +0.63 reb/36, measured): %s" % ", ".join(sorted(nobig)))
     out = []
     for (nm, tm, opp), L in lines.items():
         # 10/22 fix: preseason minutes are CAPPED for stars (Mitchell/Murray/SGA ~22) -> regular-season minutes first
@@ -52,6 +62,8 @@ def dig(day=None):
             v = [g[4] for g in band]
             per_min = sum(g[4] for g in same) / max(sum(g[3] for g in same), 1)
             proj = per_min * exp_min
+            if opp in nobig and "Reb" in stat and DK.is_big(PR.get(("2025-26", nm)) or PR.get(("2024-25", nm))):
+                proj += 0.63 * exp_min / 36                         # no-big opponent lift (rebounds only)
             this = [r[0] for r in db.execute("select %s from nba_box b where b.player=? and b.date >= '2026-10-01' and b.min > 0 order by b.date" % e, (nm,))]
             h2h = [g[4] for g in same if g[2] == opp]
             sides = ["over"] if kind in ("goblin", "demon") else ["over", "under"]
@@ -68,8 +80,8 @@ def dig(day=None):
     out.sort(key=lambda x: ({"standard": 0, "demon": 1, "goblin": 2}[x[5]], -x[0]))
     print("MINUTES DIG %s -- lines where his games at TONIGHT's minutes (current team) clear the bar (std 70%%, demon 55%%, goblin 85%%)" % day)
     for r, nm, tm, opp, stat, kind, side, ln, n, em, pj, th, hh, rt, rh in out:
-        print("  %-8s %-22s %-4s v %-4s %-20s %-5s %5g | at ~%.0f min: %3.0f%% (n=%d) | proj %.1f | 2026 %s | h2h %s"
-              % (kind.upper(), nm[:22], tm, opp, stat[:20], side, ln, em, 100 * r, n, pj, th, hh))
+        print("  %-8s %-22s %-4s v %-4s %-20s %-5s %5g | at ~%.0f min: %3.0f%% (n=%d) | proj %.1f | 2026 %s | h2h %s%s"
+              % (kind.upper(), nm[:22], tm, opp, stat[:20], side, ln, em, 100 * r, n, pj, th, hh, "  [OPP NO BIG]" if opp in nobig else ""))
     return out
 
 
