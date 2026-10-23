@@ -206,11 +206,10 @@ def db_rows(db, player, stat):
         out["mins_cur"] = [m for d, o, m, v, s, h in rows if d >= "2026-10-01"]
         if stat in QTR:
             qx = re.sub(r"\b(pts|reb|ast|fga|fgm|tpa|dunks)\b", r"q.\1", QTR[stat])
-            q = db.execute("select avg(case when q.period=1 then " + qx + " end), avg(h.v), avg(f.v) from nba_box b "
-                           "join nba_qtr q on q.game_id=b.game_id and q.player_id=b.player_id "
-                           "join (select game_id, player_id, sum(%s) v from nba_qtr where period<=2 group by 1,2) h on h.game_id=b.game_id and h.player_id=b.player_id "
-                           "join (select game_id, player_id, sum(%s) v from nba_qtr group by 1,2) f on f.game_id=b.game_id and f.player_id=b.player_id "
-                           "where b.player=? and b.min>=15" % (QTR[stat], QTR[stat]), (player,)).fetchone()
+            # 10/23: per-game sums over HIS quarter rows only (the old joins aggregated all 189K nba_qtr rows twice -- 0.26s a line)
+            q = db.execute("select avg(q1), avg(h), avg(f) from (select sum(case when q.period=1 then {x} end) q1, sum(case when q.period<=2 then {x} end) h, "
+                           "sum({x}) f from nba_box b join nba_qtr q on q.game_id=b.game_id and q.player_id=b.player_id "
+                           "where b.player=? and b.min>=15 group by b.game_id)".format(x=qx), (player,)).fetchone()
             if q and q[2]:
                 out["qtr"] = q
         tn = db.execute("select starter, pct from nba_lineups where player=? order by date desc limit 1", (player,)).fetchone()
