@@ -67,7 +67,7 @@ def run():
             print("  %s  legs %2d | 2-pick %-6s | 3-pick %s" % (d, n, a, b))
         for k in (2, 3):
             w, n, net = tot[k]
-            print("  %d-pick every day: %d-%d (%.0f%%)  flat $1 net %+.2f  ROI %+.0f%%" % (k, w, n - w, 100 * w / max(n, 1), net, 100 * net / max(n, 1)))
+            print("  %d-pick every day: %d-%d (%.0f%%)  at $5/slip net %+.2f (staked $%d)  ROI %+.0f%%" % (k, w, n - w, 100 * w / max(n, 1), 5 * net, 5 * n, 100 * net / max(n, 1)))   # user 10/23: $5 per slip
 
 
 if __name__ == "__main__":
