@@ -12,7 +12,7 @@ a number stat on ESPN"). Every cached ESPN summary (data/nba_season/raw, filled 
 """
 import sys, os, re, gzip, json, glob, sqlite3, collections, statistics as st
 
-DB = "sports.db"
+DB = "nba_pbp.db"          # 10/23: laptop-only file (173 MB) -- kept out of sports.db so the cloud bundle stays small
 RAW = os.path.join("data", "nba_season", "raw")
 
 
@@ -106,6 +106,8 @@ def parse(gid, s, c):
 
 
 def build():
+    if os.environ.get("PROPDESK_CLOUD"):
+        print("play-by-play: laptop only (nba_pbp.db is not in the cloud bundle)"); return
     c = sqlite3.connect(DB, timeout=60); schema(c)
     done = {r[0] for r in c.execute("select game_id from nba_pbp_done")}
     files = [f for f in glob.glob(os.path.join(RAW, "*.json.gz")) if os.path.basename(f).split(".")[0] not in done]

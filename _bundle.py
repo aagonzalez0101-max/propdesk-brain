@@ -19,7 +19,8 @@ SKIP_DIRS = {"lines_archive", "data", "_fotmob", "_img_cache", "_site_cache", "_
              ".claude", "__pycache__", ".git", ".github", "betting", "_bundle_tmp", "graphify-out"}
 SKIP_EXT = {".py", ".log", ".out", ".vtt", ".cmd", ".sh", ".md"}
 SKIP_FILES = {".env", "notify.json", ".gitignore", "requirements.txt", ASSET, "_bundle_state.json",
-              "_dc2026.csv", "bvp.jsonl"}   # 10/16: 127 MB of dead data (no script reads _dc2026; bvp = MLB, paused) -- uploads were timing out
+              "_dc2026.csv", "bvp.jsonl",
+              "nba_pbp.db"}   # 10/23: play-by-play shots/events, 173 MB, laptop-only (profiles); sports.db keeps the lineup stints   # 10/16: 127 MB of dead data (no script reads _dc2026; bvp = MLB, paused) -- uploads were timing out
 STATE = "_bundle_state.json"
 
 
