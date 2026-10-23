@@ -37,6 +37,17 @@ def dig(day=None):
             nobig.add(t_)
     if nobig:
         print("OPPONENTS STARTING NO REAL BIG (bigs vs them +0.63 reb/36, measured): %s" % ", ".join(sorted(nobig)))
+    # 10/23 user: tempo. Measured 2 seasons (26K player-games, 24+ min): PRA/36 vs own avg = +0.95 vs FAST-third opponents, -0.65 vs
+    # SLOW-third (t=13.9). Tag every leg with the opponent's pace tier (last season's possessions/game; this season once 10+ games).
+    pc = collections.defaultdict(list)
+    for se_, h_, a_, ps_ in db.execute("select season, home, away, poss from nba_games where stype='regular' and poss is not null and season in ('2025-26','2026-27')"):
+        pc[(se_, h_)].append(ps_); pc[(se_, a_)].append(ps_)
+    pace = {}
+    for (se_, t_), v_ in pc.items():
+        if se_ == "2026-27" and len(v_) >= 10 or se_ == "2025-26" and t_ not in pace:
+            pace[t_] = st.mean(v_)
+    vals = sorted(pace.values()); lo_p, hi_p = (vals[len(vals) // 3], vals[2 * len(vals) // 3]) if vals else (0, 0)
+    tier = lambda t: "" if t not in pace else ("FAST" if pace[t] >= hi_p else ("SLOW" if pace[t] <= lo_p else ""))
     out = []
     for (nm, tm, opp), L in lines.items():
         # 10/22 fix: preseason minutes are CAPPED for stars (Mitchell/Murray/SGA ~22) -> regular-season minutes first
@@ -81,7 +92,7 @@ def dig(day=None):
     print("MINUTES DIG %s -- lines where his games at TONIGHT's minutes (current team) clear the bar (std 70%%, demon 55%%, goblin 85%%)" % day)
     for r, nm, tm, opp, stat, kind, side, ln, n, em, pj, th, hh, rt, rh in out:
         print("  %-8s %-22s %-4s v %-4s %-20s %-5s %5g | at ~%.0f min: %3.0f%% (n=%d) | proj %.1f | 2026 %s | h2h %s%s"
-              % (kind.upper(), nm[:22], tm, opp, stat[:20], side, ln, em, 100 * r, n, pj, th, hh, "  [OPP NO BIG]" if opp in nobig else ""))
+              % (kind.upper(), nm[:22], tm, opp, stat[:20], side, ln, em, 100 * r, n, pj, th, hh, ("  [OPP NO BIG]" if opp in nobig else "") + ("  [OPP %s pace]" % tier(opp) if tier(opp) else "")))
     return out
 
 
