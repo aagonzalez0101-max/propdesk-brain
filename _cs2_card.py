@@ -80,6 +80,50 @@ def build(day, roll):
                   g["line"], g["stat"], g["mult"], g["pp_line"], g["match"], t))
 
 
+# ---------------------------------------------------------------------------------------------------------------------------------
+# RULE v3 "UNDERDOG UNDER" (10/23, user: "tweak esports"). 3,128 graded cs2_paper legs: LOWER + model edge >= 6% + Maps 1+2
+# (kills or headshots) + the player's team < 40% to win the map = 79-37 (68%), Sep 58-25 / Oct 21-12. Mechanism: a team that
+# loses the map plays fewer rounds -> fewer kills/HS (rounds drive kills, project_cs2_rounds_not_state). Cut alongside it:
+# Map-1 kills lower (46%), overs at 12%+ edge (48%), 46+ projected rounds (42%). PAPER until it holds forward (esports = paper).
+def dog_under(r):
+    e = float(r.get("edge") or 0); e = e * 100 if abs(e) < 1 else e
+    wp = r.get("map_winp"); ln = r.get("pp_line")
+    return (r.get("side") == "lower" and e >= 6 and "1+2" in (r.get("stat") or "") and wp is not None and float(wp) < 0.40
+            and ln is not None and float(ln) >= float(r.get("line") or 0))      # PP line at least as high as the modelled line
+
+
+def build_dog(day):
+    now = datetime.datetime.now(datetime.timezone.utc)
+    lo = datetime.datetime.fromisoformat(day + "T00:00:00-05:00"); hi = lo + datetime.timedelta(hours=30)
+    legs, seen = [], set()
+    for l in open(PAPER, encoding="utf-8"):
+        r = json.loads(l)
+        if r.get("result") is not None or not r.get("start") or not dog_under(r):
+            continue
+        st = datetime.datetime.fromisoformat(r["start"].replace("Z", "+00:00"))
+        if not (max(lo, now) <= st < hi) or r["player"] in seen:
+            continue
+        seen.add(r["player"]); legs.append(r)
+    legs.sort(key=lambda r: r["start"])
+    slips = []
+    while len(legs) >= 2:
+        a = legs.pop(0); b = next((x for x in legs if x["match"] != a["match"]), None)
+        if not b:
+            break
+        legs.remove(b)
+        slips.append(dict(venue="PP", n=2, pay=3.0, rule="v3 underdog under",
+                          legs=[{k: x.get(k) for k in ("player", "team", "match", "start", "stat", "kind", "maps", "line", "pp_line", "side", "edge", "map_winp", "model_p")}
+                                for x in (a, b)]))
+    fn = os.path.join("cards", "%s__cs2u.json" % day)
+    os.makedirs("cards", exist_ok=True)
+    json.dump(dict(day=day, rule="v3 underdog under", slips=slips), open(fn, "w", encoding="utf-8"), indent=1)
+    print("CS2 v3 UNDERDOG UNDER (PAPER) %s: %d slips (rule backtest 79-37, 68%%)" % (day, len(slips)))
+    for i, s in enumerate(slips, 1):
+        for g in s["legs"]:
+            t = datetime.datetime.fromisoformat(g["start"].replace("Z", "+00:00")).astimezone(CT).strftime("%a %I:%M%p")
+            print("   slip %d  %-14s UNDER %5s %-22s team map-win %.0f%%  edge %s  %s (%s)" % (i, g["player"], g["pp_line"], g["stat"], 100 * float(g["map_winp"]), g["edge"], g["match"], t))
+
+
 def grade():
     res = {}
     for l in list(open(PAPER, encoding="utf-8")) + list(open(PRICED, encoding="utf-8")):
@@ -87,7 +131,7 @@ def grade():
         if r.get("result") in ("W", "L", "VOID"):
             res[(r["player"], r["match"], r.get("start"), r.get("stat"), r.get("line"))] = r["result"]
     tot_s = tot_w = 0; net = 0.0
-    for fn in sorted(glob.glob(os.path.join("cards", "*__cs2.json"))):
+    for fn in sorted(glob.glob(os.path.join("cards", "*__cs2*.json"))):
         c = json.load(open(fn, encoding="utf-8"))
         for s in c["slips"]:
             rs = [res.get((g["player"], g["match"], g["start"], g["stat"], g["line"])) for g in s["legs"]]
@@ -110,3 +154,4 @@ if __name__ == "__main__":
         day = next((x for x in a if len(x) == 10 and x[4] == "-"), datetime.datetime.now(CT).date().isoformat())
         roll = float(a[a.index("--roll") + 1]) if "--roll" in a else 10.0
         build(day, roll)
+        build_dog(day)
