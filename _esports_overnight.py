@@ -81,6 +81,10 @@ def main():
             out = run(["_cs2_grade.py", "3000"], 1500)
             run(["_val_grade.py"], 900); run(["_dota_pull.py", "100"], 1200); run(["_dota_grade.py"], 300)
             card = run(["_cs2_card.py", "grade"], 300); run(["_calib_es.py"], 300)
+            bt = run(["_es_daily_bt.py"], 300)                    # 10/23: daily replay -- best 2 / best 3 clearing legs, running P&L
+            card += "
+" + "
+".join(l for l in bt.splitlines() if "every day" in l or l.startswith("==="))
             rec = [l for l in (out + "\n" + card).splitlines() if "overall" in l or "RULE live record" in l]
             push("🎮 ESPORTS GRADED %s" % now().strftime("%m/%d"), "\n".join(rec) or "graded (see daily_log/esports_overnight.txt)")
             graded = True

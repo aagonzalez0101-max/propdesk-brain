@@ -121,6 +121,7 @@ def grade(log, part="all"):
         ("grade CS2 paper (fast, bo3 window)", ["_cs2_grade.py", "3000"], 1500),
         ("grade Valorant paper (vlr.gg)", ["_val_grade.py"], 900),
         ("grade CS2 rule slips", ["_cs2_card.py", "grade"], 120),
+        ("ESPORTS daily replay: best 2 / best 3 clearing legs per day, running P&L (10/23)", ["_es_daily_bt.py"], 300),
         ("grade CS2 POTD (one best leg a day)", ["_potd_grade.py"], 120),
         ("grade LoL lines (lolesports feed)", ["_lol_grade.py"], 1800),
         ("KBO results + starters", ["_kbo.py", "pull", "2026"], 900),

@@ -89,7 +89,7 @@ def dog_under(r):
     e = float(r.get("edge") or 0); e = e * 100 if abs(e) < 1 else e
     wp = r.get("map_winp"); ln = r.get("pp_line")
     return (r.get("side") == "lower" and e >= 6 and "1+2" in (r.get("stat") or "") and wp is not None and float(wp) < 0.40
-            and ln is not None and float(ln) >= float(r.get("line") or 0))      # PP line at least as high as the modelled line
+            and (ln is None or float(ln) >= float(r.get("line") or 0)))       # 10/23: UD closed -> 'line' IS the PP line now (pp_line empty)
 
 
 def build_dog(day):
@@ -121,7 +121,7 @@ def build_dog(day):
     for i, s in enumerate(slips, 1):
         for g in s["legs"]:
             t = datetime.datetime.fromisoformat(g["start"].replace("Z", "+00:00")).astimezone(CT).strftime("%a %I:%M%p")
-            print("   slip %d  %-14s UNDER %5s %-22s team map-win %.0f%%  edge %s  %s (%s)" % (i, g["player"], g["pp_line"], g["stat"], 100 * float(g["map_winp"]), g["edge"], g["match"], t))
+            print("   slip %d  %-14s UNDER %5s %-22s team map-win %.0f%%  edge %s  %s (%s)" % (i, g["player"], g["pp_line"] or g["line"], g["stat"], 100 * float(g["map_winp"]), g["edge"], g["match"], t))
 
 
 def grade():
