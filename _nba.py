@@ -217,9 +217,9 @@ def ud_board():
 
 def pp_board():
     try:
-        L = g("https://partner-api.prizepicks.com/leagues", PPUA)
+        L = __import__("_ppcache").leagues()
         lid = next((x["id"] for x in L["data"] if x["attributes"]["name"].upper() == "NBA"), None)
-        d = g("https://partner-api.prizepicks.com/projections?per_page=1000&league_id=%s" % lid, PPUA)
+        d = __import__("_ppcache").projections(lid)
     except Exception as e:
         print("  (prizepicks unavailable: %s)" % e)
         return []

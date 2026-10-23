@@ -93,8 +93,7 @@ def today(day=None):
     for w in (0, 30, 60):
         time.sleep(w)
         try:
-            d = json.load(urllib.request.urlopen(urllib.request.Request("https://partner-api.prizepicks.com/projections?league_id=7&per_page=1000",
-                                                                        headers={"User-Agent": "Mozilla/5.0"}), timeout=40)); break
+            d = __import__("_ppcache").projections(7); break
         except Exception as e:
             print("PP retry", e)
     if not d:

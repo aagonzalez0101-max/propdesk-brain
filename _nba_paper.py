@@ -19,8 +19,7 @@ def pp():
     for w in (0, 30, 60, 90):
         time.sleep(w)
         try:
-            d = json.load(urllib.request.urlopen(urllib.request.Request("https://partner-api.prizepicks.com/projections?league_id=7&per_page=1000",
-                                                                        headers={"User-Agent": "Mozilla/5.0"}), timeout=40))
+            d = __import__("_ppcache").projections(7)
             json.dump(d, open("data/nba_finder/pp_nba_full.json", "w", encoding="utf-8")); return d
         except Exception as e:
             print("PrizePicks retry:", e)

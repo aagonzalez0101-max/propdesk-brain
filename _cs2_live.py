@@ -204,7 +204,7 @@ def card(min_edge=0.03, max_hours=None):
     A = {a["id"]: a for a in d["appearances"]}
     G = {gm["id"]: gm for gm in d.get("games", []) if gm.get("sport_id") == "CS"}
     try:
-        pp = g("https://partner-api.prizepicks.com/projections?per_page=1000&league_id=265", PPUA)
+        pp = __import__("_ppcache").projections(265)
         pinc = {(x["type"], x["id"]): x for x in pp.get("included", [])}
         PPL = {}
         for x in pp["data"]:

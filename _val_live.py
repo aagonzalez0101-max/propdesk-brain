@@ -35,7 +35,7 @@ def pp_lines():
     """PrizePicks Valorant board -> {(player, stat): line}."""
     out = {}
     try:
-        d = g("https://partner-api.prizepicks.com/projections?per_page=1000&league_id=159", PPUA)
+        d = __import__("_ppcache").projections(159)
     except Exception as e:
         print("prizepicks unavailable:", e)
         return out

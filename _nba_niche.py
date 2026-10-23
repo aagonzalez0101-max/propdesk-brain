@@ -78,7 +78,8 @@ def logs(name):
 
 def screen(day=None):
     now = datetime.datetime.now(CT)
-    d = get("https://partner-api.prizepicks.com/projections?league_id=7&per_page=1000", "pp_nba_full.json", 0.25)
+    d = __import__("_ppcache").projections(7)
+    json.dump(d, open(os.path.join(CACHE, "pp_nba_full.json"), "w", encoding="utf-8"))     # _nba_dig / _nba_value read this file
     P = {x["id"]: x["attributes"] for x in d.get("included", []) if x["type"] == "new_player"}
     lines = []
     for p in d["data"]:

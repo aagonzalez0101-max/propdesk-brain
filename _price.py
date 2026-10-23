@@ -66,7 +66,7 @@ def underdog(stat_filter=None):
 
 def prizepicks(league_id=2):
     try:
-        d = g("https://partner-api.prizepicks.com/projections?per_page=1000&league_id=%d" % league_id, PPUA)
+        d = __import__("_ppcache").projections(league_id)
     except Exception as e:
         print("  (prizepicks unavailable: %s)" % e)
         return {}

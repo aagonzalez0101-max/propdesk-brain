@@ -104,13 +104,10 @@ def underdog(sport):
 
 def prizepicks(league_id, max_age=600):
     # cached for 10 min: repeated screens were tripping PrizePicks' 429 rate limit (2026-09-29)
-    import os, time
-    cf = "_pp_cache_%d.json" % league_id
-    if os.path.exists(cf) and time.time() - os.path.getmtime(cf) < max_age:
-        d = json.load(open(cf, encoding="utf-8"))
-    else:
-        d = get("https://partner-api.prizepicks.com/projections?per_page=1000&league_id=%d" % league_id)
-        json.dump(d, open(cf, "w", encoding="utf-8"))
+    import _ppcache                                          # 10/23: one shared fetch for every tool (data/ppcache)
+    fresh = (_ppcache.age(league_id) or 1e9) >= min(max_age, _ppcache.MAX_AGE)
+    d = _ppcache.projections(league_id, min(max_age, _ppcache.MAX_AGE))
+    if fresh:
         archive("pp_%d" % league_id, d)
     inc = {(x["type"], x["id"]): x for x in d.get("included", [])}
     out = []

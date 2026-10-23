@@ -185,8 +185,7 @@ def board(day=None):
     for w in (0, 20, 40):
         time.sleep(w)
         try:
-            d = json.load(urllib.request.urlopen(urllib.request.Request("https://partner-api.prizepicks.com/projections?league_id=15&per_page=1000",
-                                                                        headers={"User-Agent": "Mozilla/5.0"}), timeout=40)); break
+            d = __import__("_ppcache").projections(15); break
         except Exception as e:
             print("retry", e)
     P = {x["id"]: x["attributes"] for x in d.get("included", []) if x["type"] == "new_player"}

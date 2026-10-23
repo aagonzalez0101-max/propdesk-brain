@@ -151,9 +151,9 @@ GOBLIN_MULT, DEMON_MULT = 0.75, 1.25   # payout multipliers PrizePicks applies; 
 def pp_all_types():
     """Every PrizePicks line INCLUDING goblins and demons -> {(player, stat): {type: line}}."""
     try:
-        L = g("https://partner-api.prizepicks.com/leagues", PPUA)
+        L = __import__("_ppcache").leagues()
         lid = next((x["id"] for x in L["data"] if x["attributes"]["name"].upper() == "WNBA"), None)
-        d = g("https://partner-api.prizepicks.com/projections?per_page=1000&league_id=%s" % lid, PPUA)
+        d = __import__("_ppcache").projections(lid)
     except Exception as e:
         print("prizepicks unavailable:", e)
         return {}
@@ -232,11 +232,11 @@ def goblins(gob=GOBLIN_MULT, dem=DEMON_MULT):
 
 def pp_board():
     try:
-        L = g("https://partner-api.prizepicks.com/leagues", PPUA)
+        L = __import__("_ppcache").leagues()
         lid = next((x["id"] for x in L["data"] if x["attributes"]["name"].upper() == "WNBA"), None)
         if not lid:
             return []
-        d = g("https://partner-api.prizepicks.com/projections?per_page=1000&league_id=%s" % lid, PPUA)
+        d = __import__("_ppcache").projections(lid)
     except Exception as e:
         print("prizepicks unavailable:", e)
         return []

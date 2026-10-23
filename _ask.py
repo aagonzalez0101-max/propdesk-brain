@@ -15,6 +15,25 @@ CT = datetime.timezone(datetime.timedelta(hours=-5))
 norm = lambda s: re.sub(r"[^a-z0-9]", "", (s or "").lower())
 
 
+
+class _PPResp:
+    def __init__(self, d, code):
+        self._d, self.status_code = d, code
+
+    def json(self):
+        return self._d
+
+
+def _pp_get(lg):
+    """10/23: shared PrizePicks cache (_ppcache) when present -- one fetch for every tool, no 429 pile-ups"""
+    try:
+        import _ppcache
+        return _PPResp(_ppcache.projections(lg), 200)
+    except ImportError:
+        return requests.get("https://partner-api.prizepicks.com/projections?league_id=%d&per_page=1000" % lg, timeout=30, headers={"User-Agent": "Mozilla/5.0"})
+    except Exception:
+        return _PPResp(None, 503)
+
 def tok():
     t = os.environ.get("DISCORD_BOT_TOKEN")
     if not t and os.path.exists(".env"):
@@ -63,7 +82,7 @@ def board(lg):
     rows = []
     for wait in (0, 15, 30):
         time.sleep(wait)
-        r = requests.get("https://partner-api.prizepicks.com/projections?league_id=%d&per_page=1000" % lg, timeout=30, headers={"User-Agent": "Mozilla/5.0"})
+        r = _pp_get(lg)
         if r.status_code == 200:
             d = r.json()
             P = {x["id"]: x["attributes"] for x in d.get("included", []) if x["type"] == "new_player"}

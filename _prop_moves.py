@@ -20,8 +20,7 @@ def board(lg):
     for w in (0, 20, 45):
         time.sleep(w)
         try:
-            d = json.load(urllib.request.urlopen(urllib.request.Request("https://partner-api.prizepicks.com/projections?league_id=%d&per_page=1000" % lg,
-                                                                        headers={"User-Agent": "Mozilla/5.0"}), timeout=40))
+            d = __import__("_ppcache").projections(lg)
             P = {x["id"]: x["attributes"] for x in d.get("included", []) if x["type"] == "new_player"}
             out = {}
             for p in d["data"]:

@@ -72,7 +72,7 @@ def positions():
 
 
 def pp_line(player, stat):
-    d = get("https://partner-api.prizepicks.com/projections?league_id=7&per_page=1000", "pp_nba.json", 0.25)
+    d = __import__("_ppcache").projections(7)
     P = {x["id"]: x["attributes"] for x in d.get("included", []) if x["type"] == "new_player"}
     for p in d["data"]:
         a = p["attributes"]; pl = P.get(p["relationships"]["new_player"]["data"]["id"], {})
