@@ -40,7 +40,14 @@ def one_pass():
         rows = [x for x in R["last"] if x[2] >= 20]
         if len(rows) < 20:
             continue
-        v = [x[3] for x in rows]; proj = st.mean(v[-20:])
+        reg = [r[0] for r in db.execute("select b.min from nba_box b join nba_games g using(game_id) where b.player=? and b.date >= '2026-10-01' "
+                                        "and b.min > 0 and g.stype='regular' order by b.date", (name,))]
+        if not reg:
+            continue                                         # no regular-season game yet = role unknown
+        # 10/23 Ace Bailey: L20 was his late-season 29-33 min starter games (PRA 26.4) while he now plays 24 off the bench (~17).
+        # Every value is rescaled to THIS season's minutes before the projection and the hit rates.
+        now_min = st.mean(reg[-3:])
+        v = [x[3] * now_min / x[2] for x in rows]; proj = st.mean(v[-20:])
         side = "over" if proj > ln else "under"
         if abs(proj - ln) / ln < 0.40:
             continue
@@ -55,10 +62,8 @@ def one_pass():
         cur = [r[0] for r in C]
         if cur and not all((x > ln) if side == "over" else (x < ln) for x in cur):
             continue
-        reg = [r[0] for r in db.execute("select b.min from nba_box b join nba_games g using(game_id) where b.player=? and b.date >= '2026-10-01' "
-                                        "and b.min > 0 and g.stype='regular' order by b.date", (name,))]
-        if not reg or st.mean(reg[-3:]) < 0.8 * st.mean(R["mins_last"] or [0]):   # no regular-season game yet = role unknown
-            continue                                         # role shrank this season: last season's numbers don't apply
+        if now_min < 0.8 * st.mean(R["mins_last"] or [0]):
+            continue                                        # role shrank this season: last season's numbers don't apply
         last_team = db.execute("select team from nba_box where player=? and min>0 and date between '2025-10-01' and '2026-08-01' order by date desc limit 1", (name,)).fetchone()
         now_team = db.execute("select team from nba_box where player=? and min>0 and date >= '2026-10-01' order by date desc limit 1", (name,)).fetchone()
         if last_team and now_team and last_team[0] != now_team[0]:
