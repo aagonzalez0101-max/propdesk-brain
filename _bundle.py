@@ -169,6 +169,14 @@ MERGE_KEYS = {
     "nfl_odd_paper.jsonl": lambda r: (r.get("date"), r.get("player"), r.get("stat"), r.get("line"), r.get("side")),
     "direction_paper.jsonl": lambda r: (r.get("date"), r.get("sport"), r.get("player"), r.get("stat"), r.get("line"), r.get("side")),
     "soccer_paper.jsonl": lambda r: (r.get("date"), r.get("player"), r.get("stat"), r.get("line"), r.get("side")),
+    # 10/23: first sync in 5 days -- the cloud's EMPTY nba_paper_legs would have replaced 1.3 MB of local legs; cs2 paper had new rows both sides
+    "cs2_paper.jsonl": lambda r: (r.get("ts"), r.get("version"), r.get("match_id"), r.get("pid") or r.get("player"), r.get("stat"), r.get("line"), r.get("side"), r.get("kind")),
+    "val_paper.jsonl": lambda r: (r.get("ts"), r.get("version"), r.get("match_id"), r.get("pid") or r.get("player"), r.get("stat"), r.get("line"), r.get("side"), r.get("kind")),
+    "nba_paper_legs.jsonl": lambda r: (r.get("date"), r.get("player"), r.get("stat"), r.get("line"), r.get("side")),
+    "nba_paper_slips.jsonl": lambda r: (r.get("date"), r.get("rule"), json.dumps(r.get("legs"), sort_keys=True)),
+    "nba_value_paper.jsonl": lambda r: (r.get("day"), r.get("player"), r.get("stat"), r.get("kind"), r.get("side"), r.get("line")),
+    "nba_role_paper.jsonl": lambda r: (r.get("day"), r.get("player"), r.get("stat"), r.get("line"), r.get("side")),
+    "nfl_agree_paper.jsonl": lambda r: (r.get("week"), r.get("player"), r.get("stat"), r.get("line"), r.get("side")),
 }
 
 
@@ -210,6 +218,8 @@ def push(force=False, cloud=False, _retry=True):
                     if cloud:                                       # the laptop owns road.json
                         t.extract(m, ".", filter="data")
                 elif not cloud and not m.name.endswith(".db"):      # laptop push: everything else = the cloud's newer copy
+                    if m.size == 0 and os.path.exists(m.name) and os.path.getsize(m.name) > 0:
+                        continue                                    # 10/23: an empty cloud file never wipes a filled local one
                     t.extract(m, ".", filter="data")                # 10/22: NOT databases -- the cloud's sports.db replaced ours and wiped
                                                                     # nba_box/nba_qtr/nba_games/nba_out (2 seasons, rebuilt from data/nba_season/raw)
         os.remove(rp)
