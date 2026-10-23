@@ -262,8 +262,7 @@ def card(player, stat, line=None, side="over", opp=None, without=None):
     cur = season_logs(player, keys) if stat in KEYS and all(k in ESPN_KEYS for k in keys) else []
     reg = [r for r in cur if not r["pre"]]; pre = [r for r in cur if r["pre"]]
     vals = [x[3] for x in last]
-    print("  THIS SEASON   regular %s | preseason %s %s" % (fmt(hit([r["v"] for r in reg])), fmt(hit([r["v"] for r in pre])),
-          [(int(r["v"]), int(r["min"])) for r in pre][-6:]))
+    print("  THIS SEASON   %s %s" % (fmt(hit([r["v"] for r in reg])), [(int(r["v"]), int(r["min"])) for r in reg][-6:]))   # 10/23: preseason dropped
     if vals:
         sd = st.pstdev(vals) or 1
         print("  LAST SEASON   %s avg %.1f | last 20 %s | last 10 %s | last 5 %s" % (fmt(hit(vals)), st.mean(vals), fmt(hit(vals[-20:])), fmt(hit(vals[-10:])), fmt(hit(vals[-5:]))))

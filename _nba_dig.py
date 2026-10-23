@@ -67,14 +67,12 @@ def dig(day=None):
     for (nm, tm, opp), L in lines.items():
         # 10/22 fix: preseason minutes are CAPPED for stars (Mitchell/Murray/SGA ~22) -> regular-season minutes first
         reg = [m[0] for m in db.execute("select b.min from nba_box b join nba_games g using(game_id) where b.player=? and b.date >= '2026-10-01' and b.min > 0 and g.stype='regular' order by b.date", (nm,))]
-        pre = [m[0] for m in db.execute("select b.min from nba_box b join nba_games g using(game_id) where b.player=? and b.date >= '2026-10-01' and b.min > 0 and g.stype='pre' order by b.date", (nm,))]
         last = [m[0] for m in db.execute("select b.min from nba_box b join nba_games g using(game_id) where b.player=? and b.team=? and b.min > 0 and g.stype in ('regular','post','play-in') and b.date between '2025-10-01' and '2026-08-01' order by b.date", (nm, tm))]
+        # 10/23 user: preseason is done -- minutes = this regular season (last 3), else last season's last 10 on this team
         if reg:
-            exp_min = st.mean(reg)
-        elif last and st.mean(last[-10:]) >= 26:
-            exp_min = st.mean(last[-10:])                                       # established starter: last season's role, not capped preseason
-        elif pre or last:
-            exp_min = max(st.mean(pre) if pre else 0, st.mean(last[-10:]) if last else 0)
+            exp_min = st.mean(reg[-3:])
+        elif last:
+            exp_min = st.mean(last[-10:])
         else:
             continue
         for stat, kind, ln in L:
@@ -90,7 +88,8 @@ def dig(day=None):
             proj = per_min * exp_min
             if opp in nobig and "Reb" in stat and DK.is_big(PR.get(("2025-26", nm)) or PR.get(("2024-25", nm))):
                 proj += 0.63 * exp_min / 36                         # no-big opponent lift (rebounds only)
-            this = [r[0] for r in db.execute("select %s from nba_box b where b.player=? and b.date >= '2026-10-01' and b.min > 0 order by b.date" % e, (nm,))]
+            this = [r[0] for r in db.execute("select %s from nba_box b join nba_games g using(game_id) where b.player=? and b.date >= '2026-10-01' and b.min > 0 "
+                                             "and g.stype='regular' order by b.date" % e, (nm,))]
             h2h = [g[4] for g in same if g[2] == opp]
             sides = ["over"] if kind in ("goblin", "demon") else ["over", "under"]
             for side in sides:

@@ -11,7 +11,7 @@ CLEAR = the cushion group that has hit (10/20-21: projection 40%+ past the line 
         the line, this season's games (preseason + regular) all on the side, line >= 1.5 (no 0.5 coin flips).
 Still a lead, not a lock -- the alert says so; book price gets checked before money.
 """
-import sys, os, json, time, sqlite3, datetime, statistics as st
+import sys, os, re, json, time, sqlite3, datetime, statistics as st
 import _nba_finder as NF, _nba_board as B
 
 SNAP = os.path.join("data", "prop_snap.json")
@@ -50,14 +50,14 @@ def one_pass():
             continue
         # 10/23 Tre Jones bug: min>=15 hid his 13/14-min 2026 games (16.6, 17.9 under 18.5) and the projection was last season's
         # STARTER role (28 min -> FS 32.6) while he now plays 13-17 off the bench. Every 2026 game counts; role must still be the same.
-        C = db.execute("select %s, min from nba_box where player=? and date >= '2026-10-01' and min > 0 order by date" % NF.BOX[stat], (name,)).fetchall()
+        C = db.execute("select %s, b.min from nba_box b join nba_games g using(game_id) where b.player=? and b.date >= '2026-10-01' and b.min > 0 "
+                       "and g.stype='regular' order by b.date" % re.sub(r"\b([a-z]+)\b", r"b.\1", NF.BOX[stat]), (name,)).fetchall()   # 10/23: regular season only
         cur = [r[0] for r in C]
         if cur and not all((x > ln) if side == "over" else (x < ln) for x in cur):
             continue
         reg = [r[0] for r in db.execute("select b.min from nba_box b join nba_games g using(game_id) where b.player=? and b.date >= '2026-10-01' "
                                         "and b.min > 0 and g.stype='regular' order by b.date", (name,))]
-        now_min = reg[-3:] or [r[1] for r in C[-3:]]          # preseason minutes are capped -- regular season first
-        if now_min and st.mean(now_min) < 0.8 * st.mean(R["mins_last"] or [0]):
+        if not reg or st.mean(reg[-3:]) < 0.8 * st.mean(R["mins_last"] or [0]):   # no regular-season game yet = role unknown
             continue                                         # role shrank this season: last season's numbers don't apply
         last_team = db.execute("select team from nba_box where player=? and min>0 and date between '2025-10-01' and '2026-08-01' order by date desc limit 1", (name,)).fetchone()
         now_team = db.execute("select team from nba_box where player=? and min>0 and date >= '2026-10-01' order by date desc limit 1", (name,)).fetchone()
