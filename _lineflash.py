@@ -69,7 +69,7 @@ def nba_legs(day):
     for r in sorted(best.values(), key=lambda r: -r["p_ctx"]):
         t = datetime.datetime.fromisoformat(r["start"]).astimezone(CT).strftime("%I:%M%p").lstrip("0")
         out.append(dict(key="NBA|%s|%s|%s|%s|%s" % (day, r["player"], r["stat"], r["side"], r["line"]), game="%s-%s" % tuple(sorted((r["team"], r["opp"]))),
-                        p=r["p_ctx"], text="**%s** %s **%s %g** (%s v %s %s) · %.0f%% · proj %.1f · this season %s · h2h %s%s"
+                        p=r["p_ctx"], strong=(r["tier"] == "VALUE" and r["p_ctx"] >= 0.70), text="**%s** %s **%s %g** (%s v %s %s) · %.0f%% · proj %.1f · this season %s · h2h %s%s"
                         % (r["player"], r["stat"], "HIGHER" if r["side"] == "over" else "LOWER", r["line"], r["team"], r["opp"], t, 100 * r["p_ctx"],
                            r["proj"], r["cur"], r["h2h"] or "--", (" · " + "; ".join(r["why"])) if r["why"] else "")))
     return out
@@ -111,18 +111,22 @@ def one_pass(push=False, soccer_refresh=False):
         print("  %s %s" % ("NEW" if g in new else "   ", g["text"]))
     if NEWS:
         print("  NEWS CHECK (30%%+ off the line -- research before betting): %s" % "; ".join(sorted(set(NEWS))[:12]))
+    for g in new:
+        seen[g["key"]] = stamp
+    if push:
+        json.dump(seen, open(SEEN, "w", encoding="utf-8"))
     if push and new:
         with open(LOG, "a", encoding="utf-8") as f:
             for g in new:
                 f.write(json.dumps(dict(day=day, key=g["key"], p=g["p"], text=g["text"], pushed=stamp)) + chr(10))
         import _push
+        if os.path.exists(os.path.join("data", "lineflash_quiet_%s.flag" % day)):
+            new = [g for g in new if g.get("strong")]                 # 10/24 user: "only bets today, unless you found something" --
+            if not new:                                               # quiet day pings only Edey-type finds (measured context moved it 8+ pts, 70%+)
+                return legs
         body = "\n".join(g["text"] for g in sorted(new, key=lambda g: -g["p"])[:8])
         body += "\n_value + role + h2h all pass · 2-picks · one leg per player · pair legs from different games_"
         _push.push("⚡ NEW LINES -- pass all 3 checks (2-pick legs)", body)
-    for g in new:
-        seen[g["key"]] = stamp
-    if push:
-        json.dump(seen, open(SEEN, "w", encoding="utf-8"))
     return legs
 
 
