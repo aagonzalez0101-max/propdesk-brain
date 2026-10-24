@@ -176,6 +176,7 @@ MERGE_KEYS = {
     "nba_paper_slips.jsonl": lambda r: (r.get("date"), r.get("rule"), json.dumps(r.get("legs"), sort_keys=True)),
     "nba_value_paper.jsonl": lambda r: (r.get("day"), r.get("player"), r.get("stat"), r.get("kind"), r.get("side"), r.get("line")),
     "nba_role_paper.jsonl": lambda r: (r.get("day"), r.get("player"), r.get("stat"), r.get("line"), r.get("side")),
+    "lineflash_paper.jsonl": lambda r: (r.get("day"), r.get("key")),
     "nfl_agree_paper.jsonl": lambda r: (r.get("week"), r.get("player"), r.get("stat"), r.get("line"), r.get("side")),
 }
 
