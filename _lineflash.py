@@ -13,7 +13,7 @@ checks of the bet bar (CLAUDE.md) to Discord/phone, so a 2-pick can be built min
 
 2-picks only (10/24: his PP 3-picks are 0-15, 2-picks 18-30 +16%). One leg per player; pair legs from different games.
 """
-import sys, os, io, json, time, sqlite3, datetime, contextlib, subprocess, statistics as st
+import sys, os, io, json, time, sqlite3, datetime, contextlib, subprocess, collections, statistics as st
 import _nba_finder as NF
 
 CT = datetime.timezone(datetime.timedelta(hours=-5))
@@ -34,7 +34,32 @@ def stat_rows(db, player, stat, where, args=()):
                       % (e, where), (player,) + tuple(args)).fetchall()
 
 
-OUTS, OUTMIN = {}, {}
+OUTS, OUTMIN, STATUS = {}, {}, {}
+_ZONES = {}
+
+
+def zone_boost(player, opp):
+    """FG% points his shot mix gains vs this defense compared to league average (rim / paint / mid / three, 2025-26 + 2026-27).
+    Measured 10/25 on 8,170 player-games walk-forward: real but small (best 20% +1.1 FG%, toughest 20% -1.3 FG%)."""
+    if not _ZONES:
+        Z = {"dunk": "rim", "lob dunk": "rim", "putback": "rim", "rim": "rim", "lob layup": "rim", "hook": "paint", "floater": "paint", "mid": "mid", "three": "three"}
+        D = collections.defaultdict(lambda: [0, 0]); LG = collections.defaultdict(lambda: [0, 0]); MIX = collections.defaultdict(lambda: collections.Counter())
+        try:
+            p = sqlite3.connect("nba_pbp.db", timeout=60)
+            for o, cls, made, n in p.execute("select opp, cls, made, count(*) from nba_shots where season in ('2025-26','2026-27') group by 1,2,3"):
+                z = Z.get(cls, "mid"); D[(o, z)][1] += n; LG[z][1] += n
+                if made:
+                    D[(o, z)][0] += n; LG[z][0] += n
+            for pl, cls, n in p.execute("select player, cls, count(*) from nba_shots where season in ('2025-26','2026-27') group by 1,2"):
+                MIX[pl][Z.get(cls, "mid")] += n
+        except Exception:
+            pass
+        _ZONES.update(D=D, LG=LG, MIX=MIX)
+    mix = _ZONES["MIX"].get(player); tot = sum(mix.values()) if mix else 0
+    if tot < 200:
+        return None
+    D, LG = _ZONES["D"], _ZONES["LG"]
+    return sum(mix[z] / tot * (D[(opp, z)][0] / max(D[(opp, z)][1], 1) - LG[z][0] / max(LG[z][1], 1)) for z in ("rim", "paint", "mid", "three"))
 
 
 def _expr(stat):
@@ -46,7 +71,7 @@ def _expr(stat):
 def load_outs(db):
     """tonight's OUT/Doubtful rotation players (15+ min a game this or last season) by current team, from ESPN's injury report"""
     import urllib.request, _nba_board as B
-    OUTS.clear(); OUTMIN.clear()
+    OUTS.clear(); OUTMIN.clear(); STATUS.clear()
     names = {B.norm(r[0]): r[0] for r in db.execute("select distinct player from nba_box where date >= '2024-10-01'")}
     team = {p: t for p, t in db.execute("select player, team from nba_box where date >= '2025-10-01' order by date")}
     try:
@@ -57,6 +82,8 @@ def load_outs(db):
     for t in d.get("injuries", []):
         for i in t.get("injuries", []):
             nm = names.get(B.norm(i["athlete"]["displayName"]))
+            if nm:
+                STATUS[nm] = i.get("status") or ""
             if not nm or (i.get("status") or "").lower() not in ("out", "doubtful") or nm not in team:
                 continue
             m = db.execute("select avg(b.min) from nba_box b join nba_games g using(game_id) where b.player=? and g.season in ('2025-26','2026-27') and g.stype='regular' and b.min>0", (nm,)).fetchone()[0]
@@ -91,7 +118,17 @@ def nba_legs(day):
         h = [v for _, v in stat_rows(db, r["player"], r["stat"], "g.stype in ('regular','post') and b.opp=? and b.date >= '2024-10-01'", (r["opp"],)) if v != r["line"]]
         hr = sum(on(v) for v in h) / len(h) if h else None
         if h and len(h) >= 3 and hr < 0.5:
-            continue                                                  # head-to-head disagrees
+            continue                                                  # head-to-head disagrees (OVERS: the main check -- h2h no = 42-46%)
+        if r["side"] == "under":
+            # 10/25 (1,080 graded leans): screen unders hit 50% overall; unders with last season 60%+ on the side hit 61%,
+            # and an under into a soft zone matchup is the Tyson 10/24 trap. Unders need both.
+            lastv = [v for _, v in stat_rows(db, r["player"], r["stat"], "g.season='2025-26' and g.stype='regular'") if v != r["line"]]
+            if not lastv or sum(on(v) for v in lastv) / len(lastv) < 0.60:
+                continue
+            zb = zone_boost(r["player"], r["opp"])
+            if zb is not None and zb >= 0.015:
+                NEWS.append("%s %s under %g DROPPED (soft zone matchup %+.1f FG%%)" % (r["player"], r["stat"], r["line"], 100 * zb))
+                continue
         # 10/25 (Cade U32.5 with Duren OUT: under 58% with him, 36% without; Hachimura U23.5 with Beal/Ingram/Strus OUT): teammates OUT tonight.
         # Split his line on games where that teammate was ON THIS TEAM that season but did not play (not old-team games -- the Porzingis trap).
         why_out, drop = [], False
@@ -116,6 +153,14 @@ def nba_legs(day):
             NEWS.append("%s %s %s %g DROPPED (teammates out: %s)" % (r["player"], r["stat"], r["side"], r["line"], "; ".join(why_out) or "%d rotation min out" % out_min))
             continue
         r["why"] = list(r["why"]) + why_out
+        # 10/25 user: "add overview to every single play" -- own status, last season, last 10 and zone matchup on every leg
+        stt = STATUS.get(r["player"], "")
+        if stt.lower() in ("out", "doubtful"):
+            continue
+        lastv = [v for _, v in stat_rows(db, r["player"], r["stat"], "g.season='2025-26' and g.stype='regular'") if v != r["line"]]
+        r["last_rate"] = sum(on(v) for v in lastv) / len(lastv) if lastv else None
+        r["l10_rate"] = sum(on(v) for v in lastv[-10:]) / len(lastv[-10:]) if lastv else None
+        r["zone"] = zone_boost(r["player"], r["opp"]); r["status"] = stt
         r["cur"] = [round(v, 1) for _, v in cur]; r["h2h"] = [round(v, 1) for v in h][-5:]; r["h2h_rate"] = hr
         k = r["player"]
         if k not in best or r["p_ctx"] > best[k]["p_ctx"]:
@@ -124,9 +169,11 @@ def nba_legs(day):
     for r in sorted(best.values(), key=lambda r: -r["p_ctx"]):
         t = datetime.datetime.fromisoformat(r["start"]).astimezone(CT).strftime("%I:%M%p").lstrip("0")
         out.append(dict(key="NBA|%s|%s|%s|%s|%s" % (day, r["player"], r["stat"], r["side"], r["line"]), game="%s-%s" % tuple(sorted((r["team"], r["opp"]))),
-                        p=r["p_ctx"], strong=(r["tier"] == "VALUE" and r["p_ctx"] >= 0.70), text="**%s** %s **%s %g** (%s v %s %s) · %.0f%% · proj %.1f · this season %s · h2h %s%s"
-                        % (r["player"], r["stat"], "HIGHER" if r["side"] == "over" else "LOWER", r["line"], r["team"], r["opp"], t, 100 * r["p_ctx"],
-                           r["proj"], r["cur"], r["h2h"] or "--", (" · " + "; ".join(r["why"])) if r["why"] else "")))
+                        p=r["p_ctx"], strong=(r["tier"] == "VALUE" and r["p_ctx"] >= 0.70), text="%s**%s** %s **%s %g** (%s v %s %s) · %.0f%% · proj %.1f · this season %s · h2h %s · last szn %s · last10 %s · zone %s%s"
+                        % ("⚠ %s · " % r["status"].upper() if r.get("status") else "", r["player"], r["stat"], "HIGHER" if r["side"] == "over" else "LOWER", r["line"], r["team"], r["opp"], t, 100 * r["p_ctx"],
+                           r["proj"], r["cur"], r["h2h"] or "--", "%.0f%%" % (100 * r["last_rate"]) if r.get("last_rate") is not None else "--",
+                           "%.0f%%" % (100 * r["l10_rate"]) if r.get("l10_rate") is not None else "--",
+                           "%+.1f" % (100 * r["zone"]) if r.get("zone") is not None else "--", (" · " + "; ".join(r["why"])) if r["why"] else "")))
     return out
 
 
