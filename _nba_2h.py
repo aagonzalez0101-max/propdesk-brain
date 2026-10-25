@@ -22,7 +22,7 @@ PAPER = "nba_2h_paper.jsonl"
 CT = datetime.timezone(datetime.timedelta(hours=-5))
 STATS = {"Points": lambda h: h["pts"], "Pts+Rebs+Asts": lambda h: h["pts"] + h["reb"] + h["ast"],
          "Fantasy Score": lambda h: h["pts"] + 1.2 * h["reb"] + 1.5 * h["ast"] + h["def"]}
-FEATS = ["base", "h1", "m1d", "lead", "absm", "fouls", "base_x_absm"]
+FEATS = ["base", "h1", "m1d", "lead", "absm", "fouls", "base_x_absm", "h1_vs_his_1h"]   # 10/24: +1H vs his own normal 1H (60%+ calls +1 pt)
 
 
 def table():
@@ -76,11 +76,11 @@ def featurize(rows, stat):
     for r in rows:
         H = hist[r["player"]]
         if len(H) >= 8:
-            base = st.mean(v for v, _ in H[-20:]); m1n = st.mean(m for _, m in H[-20:])
+            base = st.mean(v for v, _, _ in H[-20:]); m1n = st.mean(m for _, m, _ in H[-20:]); b1 = st.mean(u for _, _, u in H[-20:])
             absm = abs(r["lead"])
-            X.append([base, f(r["h1"]), r["m1"] - m1n, r["lead"], absm, r["fouls"], base * absm / 10])
+            X.append([base, f(r["h1"]), r["m1"] - m1n, r["lead"], absm, r["fouls"], base * absm / 10, f(r["h1"]) - b1])
             y.append(f(r["h2"])); meta.append(r)
-        H.append((f(r["h2"]), r["m1"]))
+        H.append((f(r["h2"]), r["m1"], f(r["h1"])))
     return np.array(X), np.array(y), meta
 
 
@@ -114,8 +114,8 @@ def test():
         print("   avg error: model %.2f vs 'his 2H average' %.2f  (%.0f%% better)" % (mae, mae_b, 100 * (1 - mae / mae_b)))
         print("   at a line = his 2H average: model side wins %.1f%% of all lines, %.1f%% when the model is 12%%+ off the line (n=%d)"
               % (100 * hit.mean(), 100 * hit[big].mean(), big.sum()))
-        print("   2H moves per unit:  1H %+.2f | 1H min vs usual %+.2f/min | lead %+.2f/pt | |margin| %+.2f/pt | 1H fouls %+.2f | base x margin %+.2f"
-              % tuple(coef[2:8]))
+        print("   2H moves per unit:  1H %+.2f | 1H min vs usual %+.2f/min | lead %+.2f/pt | |margin| %+.2f/pt | 1H fouls %+.2f | base x margin %+.2f | 1H vs his normal %+.2f"
+              % tuple(coef[2:9]))
         out[stat] = dict(coef=coef.tolist(), sd=float(np.std(res)), q=np.quantile(res, np.linspace(0.01, 0.99, 99)).tolist())
     json.dump(out, open("nba_2h_model.json", "w"))
     # refit on everything for live use
@@ -172,12 +172,13 @@ def live():
         if not nm or not lb or len(hist[nm]) < 8:
             continue
         f = STATS[stat]; H = hist[nm][-20:]
-        base = st.mean(f(r["h2"]) for r in H); m1n = st.mean(r["m1"] for r in H)
+        base = st.mean(f(r["h2"]) for r in H); m1n = st.mean(r["m1"] for r in H); b1 = st.mean(f(r["h1"]) for r in H)
         h1 = dict(lb["h1"]); h1["def"] = h1.pop("def_") * 0.5
         absm = abs(lb["lead"])
-        xv = np.array([[base, f(h1), lb["m1"] - m1n, lb["lead"], absm, lb["fouls"], base * absm / 10]])
+        xv = np.array([[base, f(h1), lb["m1"] - m1n, lb["lead"], absm, lb["fouls"], base * absm / 10, f(h1) - b1]])
         proj = float(predict(np.array(M[stat]["coef_all"]), xv)[0]); ln = float(a["line_score"])
         po = p_over(stat, proj, ln, M)
+        proj = proj + M[stat]["q"][49]                                # 10/24: show his TYPICAL (median) 2H, which always agrees with the call
         out.append((max(po, 1 - po), pl.get("name"), pl.get("team"), stat, ln, proj, po, base, f(h1), lb["m1"], lb["lead"], lb["fouls"], lb["status"]))
     out.sort(reverse=True)
     day = datetime.datetime.now(CT).date().isoformat()                 # 10/24: archive every 2H line seen -> graded nightly (the real edge test)
@@ -224,7 +225,30 @@ def grade():
             print("2H paper %-7s %d-%d (%.0f%%)" % (lab, sum(r["result"] == "W" for r in sub), sum(r["result"] == "L" for r in sub), 100 * st.mean(r["result"] == "W" for r in sub)))
 
 
+def check(player, day, stat, line):
+    """10/24: replay a past 2H line -- the halftime picture from our data, the model's call, and what actually happened"""
+    import _nba_board as B
+    M = json.load(open("nba_2h_model.json")); rows = table(); f = STATS[stat]
+    names = {B.norm(r["player"]): r["player"] for r in rows}
+    nm = names.get(B.norm(player))
+    H = [r for r in rows if r["player"] == nm]
+    g = [r for r in H if r["date"][:10] in (day, (datetime.date.fromisoformat(day) + datetime.timedelta(days=1)).isoformat())]
+    if not g:
+        print("  %s: no game on %s in the DB" % (player, day)); return None
+    r = g[0]; prior = [x for x in H if x["date"] < r["date"]][-20:]
+    base = st.mean(f(x["h2"]) for x in prior); m1n = st.mean(x["m1"] for x in prior); b1 = st.mean(f(x["h1"]) for x in prior); absm = abs(r["lead"])
+    xv = np.array([[base, f(r["h1"]), r["m1"] - m1n, r["lead"], absm, r["fouls"], base * absm / 10, f(r["h1"]) - b1]])
+    proj = float(predict(np.array(M[stat]["coef_all"]), xv)[0]); po = p_over(stat, proj, line, M); act = f(r["h2"])
+    proj += M[stat]["q"][49]                                          # typical (median) 2H
+    call = "HIGHER" if po >= .5 else "LOWER"; res = "PUSH" if act == line else ("W" if (act > line) == (po >= .5) else "L")
+    print("  %-20s %-14s %5g | 1H %.1f in %.0f min (usual 1H min %.0f), lead %+.0f, %d PF | 2H avg %.1f -> proj %.1f %s %.0f%% | actual 2H %.1f -> %s"
+          % (nm, stat, line, f(r["h1"]), r["m1"], m1n, r["lead"], r["fouls"], base, proj, call, 100 * max(po, 1 - po), act, res))
+    return res
+
+
 if __name__ == "__main__":
+    if sys.argv[1:2] == ["check"]:            # python _nba_2h.py check "Player" 2026-10-23 "Pts+Rebs+Asts" 14.5
+        check(sys.argv[2], sys.argv[3], sys.argv[4], float(sys.argv[5])); sys.exit()
     if sys.argv[1:2] == ["grade"]:
         grade(); sys.exit()
     a = sys.argv[1:]
