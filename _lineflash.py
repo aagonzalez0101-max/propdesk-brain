@@ -34,6 +34,36 @@ def stat_rows(db, player, stat, where, args=()):
                       % (e, where), (player,) + tuple(args)).fetchall()
 
 
+OUTS, OUTMIN = {}, {}
+
+
+def _expr(stat):
+    if stat == "Dunks":
+        return "(select coalesce(sum(dunks),0) from nba_qtr q where q.game_id=b.game_id and q.player_id=b.player_id)"
+    return NF.re.sub(r"\b([a-z]+)\b", r"b.\1", NF.BOX[stat])
+
+
+def load_outs(db):
+    """tonight's OUT/Doubtful rotation players (15+ min a game this or last season) by current team, from ESPN's injury report"""
+    import urllib.request, _nba_board as B
+    OUTS.clear(); OUTMIN.clear()
+    names = {B.norm(r[0]): r[0] for r in db.execute("select distinct player from nba_box where date >= '2024-10-01'")}
+    team = {p: t for p, t in db.execute("select player, team from nba_box where date >= '2025-10-01' order by date")}
+    try:
+        d = json.load(urllib.request.urlopen(urllib.request.Request("https://site.api.espn.com/apis/site/v2/sports/basketball/nba/injuries",
+                                                                    headers={"User-Agent": "Mozilla/5.0"}), timeout=30))
+    except Exception as e:
+        print("injuries:", e); return
+    for t in d.get("injuries", []):
+        for i in t.get("injuries", []):
+            nm = names.get(B.norm(i["athlete"]["displayName"]))
+            if not nm or (i.get("status") or "").lower() not in ("out", "doubtful") or nm not in team:
+                continue
+            m = db.execute("select avg(b.min) from nba_box b join nba_games g using(game_id) where b.player=? and g.season in ('2025-26','2026-27') and g.stype='regular' and b.min>0", (nm,)).fetchone()[0]
+            if m and m >= 15:
+                OUTS.setdefault(team[nm], []).append(nm); OUTMIN[nm] = m
+
+
 def nba_legs(day):
     import _ppcache, _nba_value as V
     json.dump(_ppcache.projections(7), open(os.path.join("data", "nba_finder", "pp_nba_full.json"), "w", encoding="utf-8"))
@@ -41,6 +71,7 @@ def nba_legs(day):
         rows = V.run(day)
     db = sqlite3.connect("sports.db", timeout=60)
     now = datetime.datetime.now(CT)
+    load_outs(db)
     best = {}
     for r in rows:
         if r["kind"] != "standard" or r["p_ctx"] < P_MIN:
@@ -61,6 +92,30 @@ def nba_legs(day):
         hr = sum(on(v) for v in h) / len(h) if h else None
         if h and len(h) >= 3 and hr < 0.5:
             continue                                                  # head-to-head disagrees
+        # 10/25 (Cade U32.5 with Duren OUT: under 58% with him, 36% without; Hachimura U23.5 with Beal/Ingram/Strus OUT): teammates OUT tonight.
+        # Split his line on games where that teammate was ON THIS TEAM that season but did not play (not old-team games -- the Porzingis trap).
+        why_out, drop = [], False
+        mates = OUTS.get(r["team"], [])
+        for o in mates:
+            G = db.execute("""select %s, exists(select 1 from nba_box t where t.game_id=b.game_id and t.player=? and t.min>0)
+                              from nba_box b join nba_games g using(game_id)
+                              where b.player=? and b.team=? and b.min>0 and g.stype='regular' and g.season in ('2024-25','2025-26','2026-27')
+                                and b.date between (select min(t2.date) from nba_box t2 join nba_games g2 using(game_id) where t2.player=? and t2.team=b.team and g2.season=g.season)
+                                               and (select max(t2.date) from nba_box t2 join nba_games g2 using(game_id) where t2.player=? and t2.team=b.team and g2.season=g.season)"""
+                           % _expr(r["stat"]), (o, r["player"], r["team"], o, o)).fetchall()
+            wo = [v for v, played in G if not played and v != r["line"]]; wi = [v for v, played in G if played and v != r["line"]]
+            if len(wo) >= 6 and wi:
+                rwo, rwi = sum(on(v) for v in wo) / len(wo), sum(on(v) for v in wi) / len(wi)
+                why_out.append("w/o %s %.0f%% (n=%d) vs with %.0f%%" % (o.split()[-1], 100 * rwo, len(wo), 100 * rwi))
+                if rwo < 0.5 or rwo < rwi - 0.15:
+                    drop = True
+        out_min = sum(OUTMIN.get(o, 0) for o in mates)
+        if r["side"] == "under" and out_min >= 50 and not why_out:
+            drop = True                                               # unmeasured usage bump: 50+ rotation minutes out and no split to say it's safe
+        if drop:
+            NEWS.append("%s %s %s %g DROPPED (teammates out: %s)" % (r["player"], r["stat"], r["side"], r["line"], "; ".join(why_out) or "%d rotation min out" % out_min))
+            continue
+        r["why"] = list(r["why"]) + why_out
         r["cur"] = [round(v, 1) for _, v in cur]; r["h2h"] = [round(v, 1) for v in h][-5:]; r["h2h_rate"] = hr
         k = r["player"]
         if k not in best or r["p_ctx"] > best[k]["p_ctx"]:
