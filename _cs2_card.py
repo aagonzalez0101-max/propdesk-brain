@@ -104,6 +104,14 @@ def build_dog(day):
         if not (max(lo, now) <= st < hi) or r["player"] in seen:
             continue
         seen.add(r["player"]); legs.append(r)
+    # 10/26: one leg per MATCH across the whole card -- 10/25 FUT vs Liquid put 5 unders on one match and the dog fought a long
+    # series (EliGE 44 on 30.5): every leg lost together. Keep only that match's best-edge leg.
+    best = {}
+    for r in legs:
+        k = r.get("match_id") or r["match"]
+        if k not in best or float(r.get("edge") or 0) > float(best[k].get("edge") or 0):
+            best[k] = r
+    legs = list(best.values())
     legs.sort(key=lambda r: r["start"])
     slips = []
     while len(legs) >= 2:
