@@ -13,19 +13,29 @@ BINS = [0.0, 0.55, 0.60, 0.65, 0.70, 0.75, 0.80, 0.85, 1.01]
 K = 20
 
 
+def _alt(r):
+    """10/26: lines 35%+ away from the model mean are alt/demon lines (Valorant U43.5 kills vs a 27 average 'hit' 36/36) --
+    PP only posts them one way, so they are not bettable and must not train the calibration"""
+    try:
+        mu, ln = float(r.get("model_mu")), float(r.get("line"))
+        return mu > 0 and abs(ln - mu) / mu > 0.35
+    except (TypeError, ValueError):
+        return False
+
+
 def _rows(market):
     out, seen = [], set()
     if market == "cs2" and os.path.exists("cs2_priced_all.jsonl"):
         for l in open("cs2_priced_all.jsonl", encoding="utf-8"):
             r = json.loads(l)
-            if r.get("result") in ("W", "L") and r.get("model_p") and r.get("maps") == 2:
+            if r.get("result") in ("W", "L") and r.get("model_p") and r.get("maps") == 2 and not _alt(r):
                 k = (r.get("match_id"), r.get("pid"), r.get("kind"), r.get("line"))
                 if k not in seen:
                     seen.add(k); out.append((r["model_p"], r["result"] == "W"))
     elif market == "val" and os.path.exists("val_priced_all.jsonl"):
         for l in open("val_priced_all.jsonl", encoding="utf-8"):
             r = json.loads(l)
-            if r.get("result") in ("W", "L") and r.get("model_p"):
+            if r.get("result") in ("W", "L") and r.get("model_p") and not _alt(r):
                 k = (r.get("match"), r.get("player"), r.get("stat"), r.get("line"))
                 if k not in seen:
                     seen.add(k); out.append((r["model_p"], r["result"] == "W"))
