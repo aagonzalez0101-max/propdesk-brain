@@ -29,8 +29,13 @@ def pn(s):
     return re.sub(r"[^a-z0-9]", "", unicodedata.normalize("NFKD", str(s or "")).encode("ascii", "ignore").decode().lower())
 
 
-def same_team(a, b):
-    return bool(a and b) and (a == b or (len(a) > 3 and len(b) > 3 and (a[:4] in b or b[:4] in a)))
+def same_team(raw, b):
+    """raw = PP's team name ('Inner Circle'), b = nm() of the map source's name, which is sometimes initials ('ic', 10/27)."""
+    a = nm(raw)
+    words = [w for w in re.findall(r"[a-z0-9]+", unicodedata.normalize("NFKD", str(raw or "")).encode("ascii", "ignore").decode().lower())
+             if w not in ("team", "gaming", "esports", "esport", "club", "gg", "academy")]
+    ini = "".join(w[0] for w in words) if len(words) > 1 else None
+    return bool(a and b) and (a == b or b == ini or (len(a) > 3 and len(b) > 3 and (a[:4] in b or b[:4] in a)))
 
 
 def history(game):
@@ -116,7 +121,7 @@ def judge(g, H, key):
     prior = [v for s in hist if s["date"] < d for v in [m12(s, g["kind"])] if v is not None]
     if len(prior) < 10:
         return None
-    o = nm(g["opp"])
+    o = g["opp"]
     hh = [v for s in hist if s["date"] < d and same_team(o, s["opp"]) for v in [m12(s, g["kind"])] if v is not None]
     ln = g["line"]; L30, L10 = prior[-30:], prior[-10:]
     o30 = sum(v > ln for v in L30) / len(L30); u30 = sum(v < ln for v in L30) / len(L30)
@@ -197,7 +202,7 @@ def grade():
         if r.get("result") or datetime.datetime.fromisoformat(r["start"]) > now - datetime.timedelta(hours=2):
             continue
         H = Hs.setdefault(r["game"], history(r["game"]))
-        d0 = datetime.date.fromisoformat(r["start"][:10]); o = nm(r["opp"])
+        d0 = datetime.date.fromisoformat(r["start"][:10]); o = r["opp"]
         ss = [s for s in H.get(r["hkey"], []) if abs((datetime.date.fromisoformat(s["date"]) - d0).days) <= 1 and same_team(o, s["opp"])]
         a = m12(ss[0], r["kind"]) if ss else None
         if a is None:
