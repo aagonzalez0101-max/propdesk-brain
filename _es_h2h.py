@@ -194,7 +194,7 @@ def grade():
     R = [json.loads(l) for l in open(LOG, encoding="utf-8")] if os.path.exists(LOG) else []
     now = datetime.datetime.now(datetime.timezone.utc); Hs = {}
     for r in R:
-        if r.get("result") or datetime.datetime.fromisoformat(r["start"]) > now - datetime.timedelta(hours=4):
+        if r.get("result") or datetime.datetime.fromisoformat(r["start"]) > now - datetime.timedelta(hours=2):
             continue
         H = Hs.setdefault(r["game"], history(r["game"]))
         d0 = datetime.date.fromisoformat(r["start"][:10]); o = nm(r["opp"])
