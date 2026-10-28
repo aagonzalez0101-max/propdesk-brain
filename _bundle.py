@@ -179,6 +179,7 @@ MERGE_KEYS = {
     "nba_2h_paper.jsonl": lambda r: (r.get("day"), r.get("player"), r.get("stat"), r.get("line")),
     "es_h2h_paper.jsonl": lambda r: r.get("key"),
     "single_check.jsonl": lambda r: r.get("key"),
+    "xcheck_log.jsonl": lambda r: r.get("key"),
     "lineflash_paper.jsonl": lambda r: (r.get("day"), r.get("key")),
     "nfl_agree_paper.jsonl": lambda r: (r.get("week"), r.get("player"), r.get("stat"), r.get("line"), r.get("side")),
 }

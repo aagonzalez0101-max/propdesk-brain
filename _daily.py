@@ -59,6 +59,7 @@ def lines(day, log):
         ("Valorant paper card", ["_val_live.py", "card"], 900),
         ("ESPORTS H2H cards: CS2 v4 own+h2h, VAL/Dota h2h-under (paper, 10/26)", ["_es_h2h.py", cday], 900),
         ("SINGLES vs PARLAYS: FanDuel price on every PP leg bet today (10/27)", ["_single_check.py", "snap"], 600),
+        ("CROSS-CHECK: every PP line vs Underdog/Sleeper/Dabble/FanDuel/Pinnacle (10/28)", ["_xcheck.py"], 1500),
         ("KBO board v2 (Elo + starter + opener)", ["_kbo_model.py", "board"], 600),
         ("NPB board (starters + ERA gap)", ["_npb.py"], 600),
         ("tennis boost-leg board", ["_tennis_board.py"], 900),
