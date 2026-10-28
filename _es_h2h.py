@@ -110,7 +110,7 @@ def board(game, day):
         if not (max(lo, now) <= t < hi):
             continue
         p = P.get(x["relationships"]["new_player"]["data"]["id"], {})
-        if not p.get("name") or "+" in p["name"]:                 # 10/28: a nameless/combo entry matched pn("None") history
+        if p.get("name") in (None, "", "None") or "+" in p["name"]:               # 10/28: a nameless/combo entry matched pn("None") history
             continue
         yield dict(game=game, player=p.get("name"), team=p.get("team"), opp=re.sub(r"\s*MAPS?\s.*$", "", a.get("description") or ""),
                    match=a.get("game_id"), start=t.astimezone(datetime.timezone.utc).isoformat(), stat=a["stat_type"],
