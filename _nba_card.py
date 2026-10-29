@@ -132,9 +132,21 @@ def replay():
     print("  all days top-6: %d/%d = %.1f%%  (2-pick b/e 57.7%%)" % (tot[0], tot[1], 100 * tot[0] / max(1, tot[1])))
 
 
+def live_lines(day):
+    """(player, stat, line) of STANDARD lines on the board file right now -- a logged leg whose line moved or was pulled is stale (10/29 Avdija 11.5 -> 12.5)"""
+    d = json.load(open("data/nba_finder/pp_nba_full.json", encoding="utf-8"))
+    P = {x["id"]: x["attributes"] for x in d["included"] if x["type"] == "new_player"}
+    return {(P.get(a["relationships"]["new_player"]["data"]["id"], {}).get("name"), a["attributes"]["stat_type"], float(a["attributes"]["line_score"]))
+            for a in d["data"] if a["attributes"].get("odds_type") == "standard" and a["attributes"]["start_time"].startswith(day)}
+
+
 def card(day):
     R = load_rows(); G = [r for r in R if r.get("result") in ("W", "L")]
-    T = [r for r in R if r["day"] == day]
+    LIVE = live_lines(day)
+    stale = [r for r in R if r["day"] == day and (r["player"], r["stat"], float(r["line"])) not in LIVE]
+    T = [r for r in R if r["day"] == day and (r["player"], r["stat"], float(r["line"])) in LIVE]
+    if stale:
+        print("dropped %d logged legs whose line moved or was pulled: %s" % (len(stale), ", ".join(sorted({"%s %s %g" % (r["player"].split()[-1], r["stat"], r["line"]) for r in stale})[:8])))
     B = load_box({r["player"] for r in R if r["day"] in (day,) or r in G}); cal = Cal(G)
     out = []
     for r in T:
