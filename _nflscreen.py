@@ -51,7 +51,7 @@ COL = {
     "Pass TDs": "passing_tds",
     "Rush + Rec Yards": ("rushing_yards", "receiving_yards"),
     "Pass + Rush Yards": ("passing_yards", "rushing_yards"),
-    "Interceptions": "interceptions",
+    "Interceptions": "passing_interceptions",    # 10/29: was "interceptions" -- not in the current weekly file, so every QB read 0 picks (Love "7/7 INT-free" was really 2/7)
 }
 # stats that compete for the same team resource -- two legs from the same team
 # on any of these are one bet, not two
