@@ -46,6 +46,7 @@ def lines(day, log):
         ("NBA paper: every PP standard line + projections (10/22)", ["_nba_paper.py", "log", cday], 900),
         ("NBA no-bigs dunk screen (10/22)", ["_nba_dunks.py", cday], 300),
         ("NBA VALUE finder: context the line didn't price (10/23)", ["_nba_value.py", cday], 600),
+        ("NBA CARD v2: filter stack + new-team fix, ranked by recalibrated p (10/28)", ["_nba_card.py", cday], 300),
         ("NHL props (today)", ["_props.py", "nhl", day], 900),
         ("NHL props (tomorrow)", ["_props.py", "nhl", tomorrow], 900),
         ("WNBA props (today)", ["_bball.py", "screen", "wnba", day], 900),
