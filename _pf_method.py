@@ -15,6 +15,7 @@ import _ppcache as C, _lineflash as F
 import sqlite3
 
 CT = datetime.timezone(datetime.timedelta(hours=-5))
+ESPN = {"NYK": "NY", "GSW": "GS", "SAS": "SA", "NOP": "NO", "UTA": "UTAH", "WAS": "WSH"}   # 10/30: PP's team code vs our box's (Maxey h2h vs NYK came back empty -- it's really "NY")
 STAT = {"Points": "pts", "Rebounds": "reb", "Assists": "ast", "Pts+Rebs+Asts": "pts+reb+ast", "Pts+Rebs": "pts+reb",
         "Pts+Asts": "pts+ast", "Rebs+Asts": "reb+ast", "3-PT Made": "tpm", "3-PT Attempted": "tpa", "FG Attempted": "fga",
         "FG Made": "fgm", "Two Pointers Attempted": "fga-tpa", "Fantasy Score": "pts+1.2*reb+1.5*ast+3*stl+3*blk-tov",
@@ -32,7 +33,8 @@ def board(day):
         if not a["start_time"].startswith(day):
             continue
         p = P.get(x["relationships"]["new_player"]["data"]["id"], {})
-        out.append(dict(player=p.get("name"), team=p.get("team"), opp=(a.get("description") or "").split()[0],
+        opp_raw = (a.get("description") or "").split()[0]
+        out.append(dict(player=p.get("name"), team=ESPN.get(p.get("team"), p.get("team")), opp=ESPN.get(opp_raw, opp_raw),
                         stat=a["stat_type"], line=float(a["line_score"]), start=a["start_time"]))
     return out
 
