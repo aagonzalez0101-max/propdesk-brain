@@ -79,6 +79,14 @@ def own_zone_fg(c, player, zone_cls_map):
     return {z: (made[z] / att[z] if att[z] else None) for z in ("rim", "paint", "mid", "three")}
 
 
+def teammate_already_out(c, teammate, since):
+    """10/30 bug caught by user: flagged Williams/Butler/Porzingis/Moody as 'out tonight' when none of them had
+    played a single game all season -- their absence was already baked into the whole L5/h2h sample, not new info.
+    Returns True if this teammate has NOT played any real minutes since `since` (i.e. his absence is already priced in)."""
+    rows = c.execute("select min, dnp from nba_box where player=? and date>=?", (teammate, since)).fetchall()
+    return not any((m or 0) > 5 and not d for m, d in rows)
+
+
 def run(day):
     c = sqlite3.connect("sports.db")
     F.load_outs(c)
@@ -132,9 +140,11 @@ def run(day):
             continue
         zd = zone_detail(g["player"], g["opp"])
         own_fg = own_zone_fg(c, g["player"], ZONE_CLS) if zd else {}
+        outs = F.OUTS.get(g["team"], [])
+        new_outs = [t for t in outs if not teammate_already_out(c, t, "2026-10-20")]
         g.update(side=side, l5=[r[3] for r in l5], l10=[r[3] for r in l10], n_season=len(cur),
                  h2h=hh[-6:], h2h_rate=h2h_rate, zone=zb, zone_detail=zd, own_fg=own_fg,
-                 status=F.STATUS.get(g["player"], "active"), teammates_out=F.OUTS.get(g["team"], []))
+                 status=F.STATUS.get(g["player"], "active"), teammates_out=outs, new_outs=new_outs)
         passed.append(g)
     print("%d players cleared steps 1-3 (L5+L10 same side, h2h agrees, zone not against)\n" % len(passed))
     for g in sorted(passed, key=lambda g: -g["h2h_rate"]):
@@ -143,8 +153,17 @@ def run(day):
         if g["status"] not in ("active", None):
             flag += "  [%s]" % g["status"]
         print("%-22s %s%-5s %-16s (%s v %s %s)%s" % (g["player"], g["side"][0].upper(), g["line"], g["stat"], g["team"], g["opp"], t, flag))
+        teammate_note = "none"
+        if g["teammates_out"]:
+            already = [t for t in g["teammates_out"] if t not in g["new_outs"]]
+            parts = []
+            if g["new_outs"]:
+                parts.append("NEW tonight: %s (check usage impact)" % ", ".join(g["new_outs"]))
+            if already:
+                parts.append("already out all season (priced into the sample, not new): %s" % ", ".join(already))
+            teammate_note = "; ".join(parts)
         print("   L5 %s | L%d(season) %s | h2h vs %s %s (%.0f%%) | teammates OUT: %s" % (
-            g["l5"], g["n_season"], g["l10"], g["opp"], g["h2h"], 100 * g["h2h_rate"], ", ".join(g["teammates_out"]) or "none"))
+            g["l5"], g["n_season"], g["l10"], g["opp"], g["h2h"], 100 * g["h2h_rate"], teammate_note))
         if g["zone_detail"]:
             for share, z, label, rk, n in g["zone_detail"]:
                 fg = g["own_fg"].get(z)
