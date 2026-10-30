@@ -43,6 +43,7 @@ def lines(day, log):
     steps = [
         ("snapshot every board", ["_snap_lines.py"], 900),
         ("capper videos (2eZ + Fantasy Aces)", ["_cappers.py", day], 300),
+        ("NBA MAIN SCREEN -- PickFinder method: L5+season agree, h2h agree, zone matches (10/30)", ["_pf_method.py", cday], 300),
         ("NBA paper: every PP standard line + projections (10/22)", ["_nba_paper.py", "log", cday], 900),
         ("NBA no-bigs dunk screen (10/22)", ["_nba_dunks.py", cday], 300),
         ("NBA VALUE finder: context the line didn't price (10/23)", ["_nba_value.py", cday], 600),
