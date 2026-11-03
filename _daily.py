@@ -54,7 +54,7 @@ def lines(day, log):
         ("NBA props (today)", ["_bball.py", "screen", "nba", day], 900),
         ("Soccer props (today)", ["_soccer.py", day], 900),
         ("Soccer props (tomorrow)", ["_soccer.py", tomorrow], 900),
-        ("NFL props screen", ["_nflscreen.py"], 900),
+        ("NFL props screen (today's games only, 11/2 fix)", ["_nflscreen.py", cday], 900),
         ("CFB key-number spreads", ["_cfb.py", "board", day], 300),
         ("CS2 paper card", ["_cs2_live.py", "card"], 900),
         ("CS2 SLIPS (measured rule)", ["_cs2_card.py", cday], 300),
