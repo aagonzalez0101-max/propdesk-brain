@@ -97,15 +97,20 @@ def rate(logs, col, line, side):
     return dict(n=n, raw=raw, shrunk=shrunk, vals=vals)
 
 
-def live_lines():
-    """10/7: Underdog is closed -> PrizePicks standard NFL lines (league 9). PP stat names mapped onto COL's UD-style names."""
-    import _props as P
+def live_lines(day=None):
+    """10/7: Underdog is closed -> PrizePicks standard NFL lines (league 9). PP stat names mapped onto COL's UD-style names.
+    11/2: `day` (YYYY-MM-DD, US Central) keeps only that day's games -- without it the 11/2 run screened next week's JAX-BAL
+    board as if it were Monday night (MNF was CHI-SEA)."""
+    import _props as P, datetime
+    CT = datetime.timezone(datetime.timedelta(hours=-6))
     PPMAP = {"Rush Yards": "Rush Yards", "Rush Attempts": "Rush Attempts", "Receiving Yards": "Receiving Yards", "Receptions": "Receptions",
              "Rec Targets": "Targets", "Pass Yards": "Pass Yards", "Pass Completions": "Completions", "Pass Attempts": "Pass Attempts",
              "Pass TDs": "Pass TDs", "Rush+Rec Yds": "Rush + Rec Yards", "Pass+Rush Yds": "Pass + Rush Yards", "INT": "Interceptions"}
     rows = []
     for l in P.prizepicks(9, max_age=900):
         if l.get("kind") != "standard" or l["stat"] not in PPMAP:
+            continue
+        if day and l.get("start") and datetime.datetime.fromisoformat(l["start"]).astimezone(CT).date().isoformat() != day:
             continue
         rows.append(("%s vs %s" % (l.get("team"), (l.get("opp") or "")[:4]), l["player"], PPMAP[l["stat"]], l["line"], {"higher": 1.0, "lower": 1.0}))
     return rows
@@ -130,7 +135,10 @@ def injuries():
 
 
 def main():
-    lines = live_lines()
+    day = sys.argv[1] if len(sys.argv) > 1 else None
+    lines = live_lines(day)
+    if day:
+        print("games on %s (US Central) only" % day)
     inj, inj_team = injuries()
     print("injury report: %d skill/other players listed" % len(inj))
     logs25, logs26 = load_logs(2025), load_logs(2026)
