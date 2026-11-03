@@ -11,7 +11,7 @@ import sys, os, json, subprocess, sqlite3, datetime
 from collections import defaultdict
 
 F = "site_reads.jsonl"
-CT = datetime.timezone(datetime.timedelta(hours=-5))
+CT = __import__("zoneinfo").ZoneInfo("America/Chicago")
 
 NODE = r"""
 const fs=require('fs');const h=fs.readFileSync('site/prop_desk.html','utf8');const src=h.match(/<script>([\s\S]*)<\/script>/)[1];

@@ -17,7 +17,7 @@ CLEAR = price >= 57.7% (real, not moved) or no price (niche) AND season >= 62% A
 import sys, json, time, datetime, sqlite3, collections, statistics as st, urllib.request
 import _nba_board as B, _nba_finder as NF, _props as PR
 
-CT = datetime.timezone(datetime.timedelta(hours=-5))
+CT = __import__("zoneinfo").ZoneInfo("America/Chicago")
 norm = B.norm
 ESPN = {"NYK": "NY", "GSW": "GS", "SAS": "SA", "NOP": "NO", "UTA": "UTAH", "WAS": "WSH"}
 

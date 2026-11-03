@@ -9,7 +9,7 @@
 import sys, json, sqlite3, datetime, statistics as st, collections
 import _nba_board as B, _nba_finder as NF
 
-CT = datetime.timezone(datetime.timedelta(hours=-5))
+CT = __import__("zoneinfo").ZoneInfo("America/Chicago")
 ESPN = {"NYK": "NY", "GSW": "GS", "SAS": "SA", "NOP": "NO", "UTA": "UTAH", "WAS": "WSH"}
 
 

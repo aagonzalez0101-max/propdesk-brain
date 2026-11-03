@@ -2,7 +2,7 @@
 `_euro.py props` (458k lines, 2014-now): raw last-15 hit rate -> the rate that actually happened -> fair American odds.
 Courtside alt overs are a bet only when Courtside pays MORE than this fair price."""
 import json, datetime, collections, requests, sys
-CT = datetime.timezone(datetime.timedelta(hours=-5))
+CT = __import__("zoneinfo").ZoneInfo("America/Chicago")
 # raw-bucket -> actual hit rate (Euroleague props backtest 10/8)
 CAL = {"pts": [(.5, .541), (.6, .632), (.7, .710), (.8, .778), (.9, .826)], "reb": [(.5, .521), (.6, .607), (.7, .699), (.8, .753), (.9, .820)],
        "ast": [(.5, .514), (.6, .621), (.7, .716), (.8, .795), (.9, .849)], "pra": [(.5, .532), (.6, .632), (.7, .723), (.8, .796), (.9, .862)]}

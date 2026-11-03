@@ -9,7 +9,7 @@ Rule (measured 10/7-10/9): a goblin pair at ~1.8x needs 74.5% per leg; average g
 import sys, datetime, itertools, json
 import _props as P, _mismatch as M
 
-CT = datetime.timezone(datetime.timedelta(hours=-5))
+CT = __import__("zoneinfo").ZoneInfo("America/Chicago")
 now = datetime.datetime.now(datetime.timezone.utc)
 rows = []
 for sp, pp_lg in M.PP_LEAGUE.items():

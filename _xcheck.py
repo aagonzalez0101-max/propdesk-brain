@@ -19,7 +19,7 @@ import requests
 import _mismatch as M
 
 H = {"User-Agent": "Mozilla/5.0", "Accept": "application/json"}
-CT = datetime.timezone(datetime.timedelta(hours=-5))
+CT = __import__("zoneinfo").ZoneInfo("America/Chicago")
 LOG = "xcheck_log.jsonl"
 norm = M.norm
 PP_LEAGUE = {"NBA": 7, "NFL": 9, "NHL": 8, "CFB": 15}

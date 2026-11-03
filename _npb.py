@@ -11,7 +11,7 @@ team ERA more than the day's arms. Lean the better starter at fair price or bett
 import re, html, datetime, requests
 
 H = {"User-Agent": "Mozilla/5.0"}
-CT = datetime.timezone(datetime.timedelta(hours=-5))
+CT = __import__("zoneinfo").ZoneInfo("America/Chicago")
 t = lambda s: re.sub(r"\s+", " ", html.unescape(re.sub(r"<[^>]+>", " ", s))).strip()
 TEAM_CODE = {"巨人": "g", "読売": "g", "ヤクルト": "s", "DeNA": "db", "中日": "d", "阪神": "t", "広島": "c", "ソフトバンク": "h",
              "日本ハム": "f", "ロッテ": "m", "楽天": "e", "西武": "l", "オリックス": "b"}

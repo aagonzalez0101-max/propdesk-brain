@@ -10,7 +10,7 @@ try:                                                    # 10/10 user: "make ever
     from zoneinfo import ZoneInfo
     CT = ZoneInfo("America/Chicago")
 except Exception:
-    CT = datetime.timezone(datetime.timedelta(hours=-5))
+    CT = __import__("zoneinfo").ZoneInfo("America/Chicago")
 ESPORTS = ("CS2", "VAL", "DOTA2", "DOTA 2", "DOTA")
 NHL_STAT = {"shots on goal": ("sog",), "points": ("points",), "assists": ("assists",), "goals": ("goals",), "hits": ("hits",),
             "blocked shots": ("blocks",)}

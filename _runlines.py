@@ -18,7 +18,7 @@ import json, io, sys, math, urllib.request, datetime as dt, collections
 
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8",
                               errors="replace", write_through=True)
-CT = dt.timezone(dt.timedelta(hours=-5))
+CT = __import__("zoneinfo").ZoneInfo("America/Chicago")
 PIN = "https://guest.api.arcadia.pinnacle.com"
 H = {"User-Agent": "Mozilla/5.0", "Accept": "application/json",
      "X-API-Key": "CmX2KcMrXuFmNg6YFbmTxE0y9CIrOi0R"}

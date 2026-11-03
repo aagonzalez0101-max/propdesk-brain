@@ -11,7 +11,7 @@ step is reported, never hidden, and never stops the rest. Output: daily_log/<dat
 """
 import sys, os, subprocess, datetime, time
 
-CT = datetime.timezone(datetime.timedelta(hours=-5))
+CT = __import__("zoneinfo").ZoneInfo("America/Chicago")
 os.makedirs("daily_log", exist_ok=True)
 PY = sys.executable
 

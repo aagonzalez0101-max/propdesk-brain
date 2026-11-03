@@ -19,7 +19,7 @@ import urllib.request
 from statistics import NormalDist
 
 N = NormalDist()
-CT = datetime.timezone(datetime.timedelta(hours=-5))
+CT = __import__("zoneinfo").ZoneInfo("America/Chicago")
 CACHE = os.path.join("data", "nba_finder")
 os.makedirs(CACHE, exist_ok=True)
 norm = lambda s: re.sub(r"[^a-z]", "", __import__("unicodedata").normalize("NFKD", s or "").encode("ascii", "ignore").decode().lower())   # 10/21: "Dončić" was "doni"

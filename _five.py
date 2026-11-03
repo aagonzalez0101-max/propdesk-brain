@@ -10,7 +10,7 @@ clear -- if fewer than 5 clear, it says so and lists the next best as optional.
 """
 import sys, os, json, re, time, datetime, sqlite3, statistics as st
 
-CT = datetime.timezone(datetime.timedelta(hours=-5))
+CT = __import__("zoneinfo").ZoneInfo("America/Chicago")
 norm = lambda s: re.sub(r"[^a-z0-9]", "", (s or "").lower())
 SPORTS = ("NFL", "CFB", "NHL", "WNBA", "NBA")          # MLB paused (user 10/2)
 BE_UD = 1 / 3.0 ** 0.5          # PrizePicks 2-pick power (3x) per-leg break-even 57.7% (was Underdog 53.5% until 10/5)

@@ -17,7 +17,7 @@ import _bball_card as C
 
 UA = {"User-Agent": "Mozilla/5.0"}
 g = lambda u: json.loads(urllib.request.urlopen(urllib.request.Request(u, headers=UA), timeout=40).read())
-CT = datetime.timezone(datetime.timedelta(hours=-5))
+CT = __import__("zoneinfo").ZoneInfo("America/Chicago")
 CACHE = "_bball_logs"
 os.makedirs(CACHE, exist_ok=True)
 SEASONS = {"wnba": (2025, 2026), "nba": (2025, 2026, 2027)}   # ESPN NBA season 2026 = 2025-26; 2027 = 2026-27 (preseason + the season opening 10/20)

@@ -10,7 +10,7 @@ Marks tested side by side:
 """
 import json, collections, datetime
 
-CT = datetime.timezone(datetime.timedelta(hours=-5))
+CT = __import__("zoneinfo").ZoneInfo("America/Chicago")
 
 
 def edge(r):

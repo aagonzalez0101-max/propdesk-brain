@@ -5,7 +5,7 @@ opponent's yards ALLOWED for that stat (summed from the box scores, trailing, re
 """
 import json, sqlite3, re, datetime, collections, statistics as st
 
-CT = datetime.timezone(datetime.timedelta(hours=-5))
+CT = __import__("zoneinfo").ZoneInfo("America/Chicago")
 norm = lambda s: re.sub(r"[^a-z0-9]", "", (s or "").lower())
 FIELDS = {"Rush Yards": ("rush_yds",), "Receiving Yards": ("rec_yds",), "Pass Yards": ("pass_yds",), "Receptions": ("rec",),
           "Rush Attempts": ("carries",), "Pass Attempts": ("att",), "Pass Completions": ("cmp",), "Rush+Rec Yds": ("rush_yds", "rec_yds"),

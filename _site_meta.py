@@ -1,7 +1,7 @@
 """PROP DESK -- the site's extra panels (2026-10-02): track record, today's card, glitch watch, NPB board, real-money record.
     python _site_meta.py     # -> site/meta.json (injected by _site_build2.py)"""
 import json, os, datetime, collections
-CT = datetime.timezone(datetime.timedelta(hours=-5))
+CT = __import__("zoneinfo").ZoneInfo("America/Chicago")
 today = datetime.datetime.now(CT).date().isoformat()
 out = {"built": datetime.datetime.now(CT).isoformat(timespec="minutes")}
 # 1) model track record: graded calls by sport x tier, and by day for the TAKE tier

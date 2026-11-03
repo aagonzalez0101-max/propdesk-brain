@@ -19,7 +19,7 @@ import numpy as np
 
 DB, PBP = "sports.db", "nba_pbp.db"
 PAPER = "nba_2h_paper.jsonl"
-CT = datetime.timezone(datetime.timedelta(hours=-5))
+CT = __import__("zoneinfo").ZoneInfo("America/Chicago")
 STATS = {"Points": lambda h: h["pts"], "Pts+Rebs+Asts": lambda h: h["pts"] + h["reb"] + h["ast"],
          "Fantasy Score": lambda h: h["pts"] + 1.2 * h["reb"] + 1.5 * h["ast"] + h["def"]}
 FEATS = ["base", "h1", "m1d", "lead", "absm", "fouls", "base_x_absm", "h1_vs_his_1h"]   # 10/24: +1H vs his own normal 1H (60%+ calls +1 pt)

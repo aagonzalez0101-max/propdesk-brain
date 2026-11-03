@@ -11,7 +11,7 @@ import os, re, json, time, datetime, requests
 API = "https://discord.com/api/v10"
 STATE = "_ask_state.json"
 LG = {9: "NFL", 15: "CFB", 8: "NHL", 7: "NBA", 82: "SOCCER", 3: "WNBA", 265: "CS2", 2: "MLB"}
-CT = datetime.timezone(datetime.timedelta(hours=-5))
+CT = __import__("zoneinfo").ZoneInfo("America/Chicago")
 norm = lambda s: re.sub(r"[^a-z0-9]", "", (s or "").lower())
 
 

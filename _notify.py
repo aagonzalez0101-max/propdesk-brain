@@ -14,7 +14,7 @@ try:                                                    # 10/10 user: everything
     from zoneinfo import ZoneInfo
     CT = ZoneInfo("America/Chicago")
 except Exception:
-    CT = datetime.timezone(datetime.timedelta(hours=-5))
+    CT = __import__("zoneinfo").ZoneInfo("America/Chicago")
 CFG = "notify.json"
 FEED = os.path.join("daily_log", "feed.txt")
 ICON = {"PROMO": "🟢", "MOVE": "📈", "PULLED": "⛔", "VALUE": "💰", "CARD": "🧾", "RESULT": "✅", "TEST": "🔔"}

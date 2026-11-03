@@ -11,7 +11,7 @@ try:
     from zoneinfo import ZoneInfo
     CT = ZoneInfo("America/Chicago")
 except Exception:
-    CT = datetime.timezone(datetime.timedelta(hours=-5))
+    CT = __import__("zoneinfo").ZoneInfo("America/Chicago")
 
 API = "https://discord.com/api/v10"
 POSTED, STATE = "_slips_posted.jsonl", "_reactions_state.json"

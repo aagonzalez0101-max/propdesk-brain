@@ -25,7 +25,7 @@ PIN = "https://guest.api.arcadia.pinnacle.com"
 H = {"User-Agent": "Mozilla/5.0"}
 PH = {"User-Agent": "Mozilla/5.0", "X-API-Key": "CmX2KcMrXuFmNg6YFbmTxE0y9CIrOi0R"}
 LEAGUE = 6227
-CT = datetime.timezone(datetime.timedelta(hours=-5))
+CT = __import__("zoneinfo").ZoneInfo("America/Chicago")
 
 # Pinnacle spells them out in English, Naver uses two-letter codes
 NAME = {"Doosan Bears": "OB", "LG Twins": "LG", "Kia Tigers": "HT", "KIA Tigers": "HT",

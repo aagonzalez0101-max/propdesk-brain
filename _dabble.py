@@ -14,7 +14,7 @@ import requests
 
 H = {"User-Agent": "Mozilla/5.0"}
 API = "https://api.dabble.com"
-CT = datetime.timezone(datetime.timedelta(hours=-5))
+CT = __import__("zoneinfo").ZoneInfo("America/Chicago")
 norm = lambda s: re.sub(r"[^a-z0-9]", "", (s or "").lower())
 COMP = {"NFL": "NFL", "NBA": "NBA", "NHL": "US NHL", "MLB": "US Major League Baseball", "WNBA": "WNBA"}
 # dabble stat key -> our sharp stat name

@@ -8,7 +8,7 @@ Then scans which sides / stats / contexts beat the line.
 import json, sqlite3, re, datetime, collections, unicodedata, time
 import _soccer as S
 
-CT = datetime.timezone(datetime.timedelta(hours=-5))
+CT = __import__("zoneinfo").ZoneInfo("America/Chicago")
 norm = lambda s: re.sub(r"[^a-z0-9]", "", unicodedata.normalize("NFKD", s or "").encode("ascii", "ignore").decode().lower())
 L = sqlite3.connect("lines.db")
 lines = {}

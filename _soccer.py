@@ -25,7 +25,7 @@ UA = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.3
 FM = "https://www.fotmob.com/api/data"
 CACHE = "_fotmob"
 OUT = "soccer_paper.jsonl"
-CT = datetime.timezone(datetime.timedelta(hours=-5))
+CT = __import__("zoneinfo").ZoneInfo("America/Chicago")
 os.makedirs(CACHE, exist_ok=True)
 BE = 1 / 3 ** 0.5                 # 57.7% -- PrizePicks 2-pick power
 CUSHION = 0.03

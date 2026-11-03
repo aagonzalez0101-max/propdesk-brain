@@ -20,7 +20,7 @@ import _kbo as K
 SP = "kbo_starters.jsonl"
 LOG = "kbo_board_log.jsonl"
 LG_ERA, PRIOR_IP = 4.40, 30.0
-CT = datetime.timezone(datetime.timedelta(hours=-5))
+CT = __import__("zoneinfo").ZoneInfo("America/Chicago")
 lg = lambda p: math.log(p / (1 - p))
 sg = lambda x: 1 / (1 + math.exp(-x))
 

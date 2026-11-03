@@ -8,7 +8,7 @@ it) -> closing-line value, the best early proof a pick was good. Moved AGAINST u
 import sys, os, glob, json, datetime, re
 import _props as P
 
-CT = datetime.timezone(datetime.timedelta(hours=-5))
+CT = __import__("zoneinfo").ZoneInfo("America/Chicago")
 norm = lambda s: re.sub(r"[^a-z0-9]", "", (s or "").lower())
 
 

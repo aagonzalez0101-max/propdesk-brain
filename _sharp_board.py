@@ -10,7 +10,7 @@ import sys, datetime, itertools, json
 import _props as P, _mismatch as M
 KIND = sys.argv[1] if len(sys.argv) > 1 else "goblin"
 
-CT = datetime.timezone(datetime.timedelta(hours=-5))
+CT = __import__("zoneinfo").ZoneInfo("America/Chicago")
 now = datetime.datetime.now(datetime.timezone.utc)
 rows = []
 for sp, pp_lg in M.PP_LEAGUE.items():

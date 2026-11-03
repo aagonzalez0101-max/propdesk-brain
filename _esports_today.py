@@ -16,7 +16,7 @@ import _esports_elo as E          # rebinds stdout to utf-8 on import
 
 UA = {"User-Agent": "Mozilla/5.0 Chrome/124", "Accept": "application/json"}
 g = lambda u: json.loads(urllib.request.urlopen(urllib.request.Request(u, headers=UA), timeout=30).read())
-CT = datetime.timezone(datetime.timedelta(hours=-5))
+CT = __import__("zoneinfo").ZoneInfo("America/Chicago")
 dec = lambda a: 1 + a / 100 if a > 0 else 1 + 100 / -a
 amer = lambda p: round(-100 * p / (1 - p)) if p >= 0.5 else round(100 * (1 - p) / p)
 norm = lambda s: re.sub(r"[^a-z0-9]", "", (s or "").lower().replace("esports", "").replace("gaming", "").replace("team", ""))

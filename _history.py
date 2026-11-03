@@ -57,7 +57,7 @@ def build():
         sp = SPORT[lg]
         if stat not in STAT[sp] or not start:
             continue
-        day = datetime.datetime.fromisoformat(start).astimezone(datetime.timezone(datetime.timedelta(hours=-5))).date().isoformat()
+        day = datetime.datetime.fromisoformat(start).astimezone(__import__("zoneinfo").ZoneInfo("America/Chicago")).date().isoformat()
         rows[(sp, pl, team, stat, day)].append((fs, ls, float(line)))
     n = 0
     with open(OUT, "w", encoding="utf-8") as f:

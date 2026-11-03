@@ -145,7 +145,7 @@ def backtest():
     for pl, st, line, start, fs in L.execute("select player, stat, line, start, last_seen from pp where league=15 and kind='standard'"):
         if st not in MODELED or not start:
             continue
-        day = datetime.datetime.fromisoformat(start).astimezone(datetime.timezone(datetime.timedelta(hours=-5))).date().isoformat()
+        day = datetime.datetime.fromisoformat(start).astimezone(__import__("zoneinfo").ZoneInfo("America/Chicago")).date().isoformat()
         rows[(pl, st, day)].append((fs, float(line)))
     res = collections.defaultdict(list)
     for (pl, st, day), v in rows.items():
@@ -180,7 +180,7 @@ def backtest():
 
 def board(day=None):
     import urllib.request, time
-    day = day or (datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=-5))).date() + datetime.timedelta(days=0)).isoformat()
+    day = day or (datetime.datetime.now(__import__("zoneinfo").ZoneInfo("America/Chicago")).date() + datetime.timedelta(days=0)).isoformat()
     d = None
     for w in (0, 20, 40):
         time.sleep(w)
@@ -194,7 +194,7 @@ def board(day=None):
         a = p["attributes"]
         if a.get("odds_type") != "standard" or a["stat_type"] not in MODELED:
             continue
-        st_day = datetime.datetime.fromisoformat(a["start_time"]).astimezone(datetime.timezone(datetime.timedelta(hours=-5))).date().isoformat()
+        st_day = datetime.datetime.fromisoformat(a["start_time"]).astimezone(__import__("zoneinfo").ZoneInfo("America/Chicago")).date().isoformat()
         if st_day != day:
             continue
         pl = P.get(p["relationships"]["new_player"]["data"]["id"], {})

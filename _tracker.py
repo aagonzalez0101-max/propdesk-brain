@@ -9,7 +9,7 @@ try:
     from zoneinfo import ZoneInfo
     CT = ZoneInfo("America/Chicago")
 except Exception:
-    CT = datetime.timezone(datetime.timedelta(hours=-5))
+    CT = __import__("zoneinfo").ZoneInfo("America/Chicago")
 with contextlib.redirect_stdout(io.StringIO()):
     from _mission import tag, L
 

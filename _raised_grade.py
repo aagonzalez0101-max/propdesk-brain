@@ -28,7 +28,7 @@ n = 0
 for r in R:
     if r.get("result") is not None or not r.get("start"):
         continue
-    day = datetime.datetime.fromisoformat(r["start"]).astimezone(datetime.timezone(datetime.timedelta(hours=-5))).date()
+    day = datetime.datetime.fromisoformat(r["start"]).astimezone(__import__("zoneinfo").ZoneInfo("America/Chicago")).date()
     if day >= datetime.date.today():
         continue
     a = None

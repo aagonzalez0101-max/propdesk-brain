@@ -9,7 +9,7 @@ Mechanism for the under: a goalie pulled after a bad start (or a blowout / low-s
 over is capped by shot volume; PP sets the number near the average, so the distribution's left tail is free money for unders."""
 import os, sys, json, glob, datetime, collections, requests
 
-CT = datetime.timezone(datetime.timedelta(hours=-5))
+CT = __import__("zoneinfo").ZoneInfo("America/Chicago")
 NHL = "https://api-web.nhle.com/v1"
 CACHE = "_nhl_goalie_box"
 norm = lambda s: "".join(ch for ch in (s or "").lower() if ch.isalnum())

@@ -12,7 +12,7 @@ from concurrent.futures import ThreadPoolExecutor
 API = "https://api-live.euroleague.net/v2/competitions/E/seasons/%s/games"
 H = {"User-Agent": "Mozilla/5.0", "Accept": "application/json"}
 CACHE = "_euro"
-CT = datetime.timezone(datetime.timedelta(hours=-5))
+CT = __import__("zoneinfo").ZoneInfo("America/Chicago")
 
 
 def get(u):

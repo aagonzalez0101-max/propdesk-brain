@@ -13,7 +13,7 @@ sys.path.insert(0, ".")
 from betting import freeodds as F
 
 LEAGUE = {"nfl": 889, "cfb": 880, "nhl": 1456, "nba": 487, "mlb": 246}
-CT = datetime.timezone(datetime.timedelta(hours=-5))
+CT = __import__("zoneinfo").ZoneInfo("America/Chicago")
 
 
 def dec(a):

@@ -172,7 +172,7 @@ def featurize(lines, pg, tg, live=False):
         if not games:
             miss["no player"] += 1; continue
         try:
-            sd = datetime.datetime.fromisoformat(l["start"]).astimezone(datetime.timezone(datetime.timedelta(hours=-5))).date()
+            sd = datetime.datetime.fromisoformat(l["start"]).astimezone(__import__("zoneinfo").ZoneInfo("America/Chicago")).date()
         except Exception:
             miss["no start"] += 1; continue
         if live:

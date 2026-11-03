@@ -102,7 +102,7 @@ def live_lines(day=None):
     11/2: `day` (YYYY-MM-DD, US Central) keeps only that day's games -- without it the 11/2 run screened next week's JAX-BAL
     board as if it were Monday night (MNF was CHI-SEA)."""
     import _props as P, datetime
-    CT = datetime.timezone(datetime.timedelta(hours=-6))
+    CT = __import__("zoneinfo").ZoneInfo("America/Chicago")
     PPMAP = {"Rush Yards": "Rush Yards", "Rush Attempts": "Rush Attempts", "Receiving Yards": "Receiving Yards", "Receptions": "Receptions",
              "Rec Targets": "Targets", "Pass Yards": "Pass Yards", "Pass Completions": "Completions", "Pass Attempts": "Pass Attempts",
              "Pass TDs": "Pass TDs", "Rush+Rec Yds": "Rush + Rec Yards", "Pass+Rush Yds": "Pass + Rush Yards", "INT": "Interceptions"}

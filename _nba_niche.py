@@ -11,7 +11,7 @@ most of these, so it is an own-model call (feedback_no_pinnacle_gate) -- the bet
 """
 import sys, json, re, os, time, datetime, urllib.request, statistics as st
 
-CT = datetime.timezone(datetime.timedelta(hours=-5))
+CT = __import__("zoneinfo").ZoneInfo("America/Chicago")
 CACHE = os.path.join("data", "nba_finder"); os.makedirs(CACHE, exist_ok=True)
 norm = lambda s: re.sub(r"[^a-z]", "", __import__("unicodedata").normalize("NFKD", s or "").encode("ascii", "ignore").decode().lower())   # 10/21: "Dončić" was "doni"
 NICHE = {"FG Made", "FG Attempted", "3-PT Attempted", "Free Throws Made", "Free Throws Attempted", "Personal Fouls", "Turnovers",

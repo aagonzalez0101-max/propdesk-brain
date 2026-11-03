@@ -10,7 +10,7 @@ Builds the best 3-pick, then 2-picks, from what's left. Writes cards/<date>.json
 """
 import sys, os, json, glob, itertools, datetime
 
-CT = datetime.timezone(datetime.timedelta(hours=-5))
+CT = __import__("zoneinfo").ZoneInfo("America/Chicago")
 BAR_PP, CUSH_UD = 0.62, 0.02
 BE = {"UD": 1 / 3.5 ** 0.5, "PP": 1 / 3.0 ** 0.5}
 BASE = {"UD": {2: 3.5, 3: 6.5}, "PP": {2: 3.0, 3: 5.0}}
@@ -182,7 +182,7 @@ def _grade_five(f, card):
         gday = None
         if g.get("start"):
             t0 = datetime.datetime.fromisoformat(str(g["start"]).replace("Z", "+00:00"))
-            gday = None if t0 > datetime.datetime.now(datetime.timezone.utc) else t0.astimezone(datetime.timezone(datetime.timedelta(hours=-5))).date().isoformat()
+            gday = None if t0 > datetime.datetime.now(datetime.timezone.utc) else t0.astimezone(__import__("zoneinfo").ZoneInfo("America/Chicago")).date().isoformat()
         if v is None and st_ and gday and g["sport"] in ("NFL", "CFB"):          # only after kickoff, only THAT game's date (10/3: matched a wrong row)
             ses = [json.loads(s) for (s,) in c.execute("SELECT stats FROM player_games WHERE sport=? AND player=? AND date IN (?, ?)",
                                                        (g["sport"], g["player"], gday,

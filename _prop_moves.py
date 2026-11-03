@@ -10,7 +10,7 @@ Measured context: the result follows PP's line move 55% of the time, and a line 
 """
 import sys, os, json, time, datetime, re, urllib.request
 
-CT = datetime.timezone(datetime.timedelta(hours=-5))
+CT = __import__("zoneinfo").ZoneInfo("America/Chicago")
 LEAGUES = {7: "NBA", 8: "NHL", 9: "NFL", 15: "CFB", 82: "SOCCER"}
 SNAP = os.path.join("data", "prop_snap.json")
 norm = lambda s: re.sub(r"[^a-z]", "", (s or "").lower())

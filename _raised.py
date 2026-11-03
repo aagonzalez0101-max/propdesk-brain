@@ -2,7 +2,7 @@
 at the NEW number (n=55). Every hour: any standard line whose current number is above its first posted number (lines.db) and whose game
 hasn't started -> raised_paper.jsonl (one row per projection). Graded nightly by _direction.py rows (same player/stat/day)."""
 import sqlite3, json, os, datetime
-CT = datetime.timezone(datetime.timedelta(hours=-5))
+CT = __import__("zoneinfo").ZoneInfo("America/Chicago")
 now = datetime.datetime.now(datetime.timezone.utc)
 c = sqlite3.connect("lines.db")
 rows = c.execute("""SELECT proj_id, league, player, team, stat, start, MIN(rowid), MAX(rowid) FROM pp WHERE kind='standard' GROUP BY proj_id

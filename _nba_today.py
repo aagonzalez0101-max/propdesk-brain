@@ -11,7 +11,7 @@ Tables: nba_refs(date, game, chief, referee, umpire), nba_lineups(date, team, pl
 import re, html, json, sqlite3, datetime, urllib.request, collections, statistics as st
 
 H = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124 Safari/537.36"}
-CT = datetime.timezone(datetime.timedelta(hours=-5))
+CT = __import__("zoneinfo").ZoneInfo("America/Chicago")
 clean = lambda s: html.unescape(re.sub(r"<[^>]+>", " ", s)).strip()
 
 

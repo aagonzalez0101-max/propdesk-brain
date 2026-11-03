@@ -20,7 +20,7 @@ Legs come from the CS2 paper card (_cs2_live.py card -> cs2_paper.jsonl), so run
 """
 import sys, os, json, glob, datetime
 
-CT = datetime.timezone(datetime.timedelta(hours=-5))
+CT = __import__("zoneinfo").ZoneInfo("America/Chicago")
 PAPER = "cs2_paper.jsonl"
 
 
@@ -39,7 +39,7 @@ def qualifies(r):
 
 def build(day, roll):
     now = datetime.datetime.now(datetime.timezone.utc)
-    lo = datetime.datetime.fromisoformat(day + "T00:00:00-05:00")
+    lo = datetime.datetime.fromisoformat(day).replace(tzinfo=__import__("zoneinfo").ZoneInfo("America/Chicago"))
     hi = lo + datetime.timedelta(hours=30)                 # the CT day plus the overnight Asia/EU morning
     legs, seen = [], set()
     for l in open(PRICED, encoding="utf-8"):
@@ -94,7 +94,7 @@ def dog_under(r):
 
 def build_dog(day):
     now = datetime.datetime.now(datetime.timezone.utc)
-    lo = datetime.datetime.fromisoformat(day + "T00:00:00-05:00"); hi = lo + datetime.timedelta(hours=30)
+    lo = datetime.datetime.fromisoformat(day).replace(tzinfo=__import__("zoneinfo").ZoneInfo("America/Chicago")); hi = lo + datetime.timedelta(hours=30)
     legs, seen = [], set()
     for l in open(PAPER, encoding="utf-8"):
         r = json.loads(l)

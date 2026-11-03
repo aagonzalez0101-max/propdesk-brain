@@ -19,7 +19,7 @@ from concurrent.futures import ThreadPoolExecutor
 PIN_KEY = "CmX2KcMrXuFmNg6YFbmTxE0y9CIrOi0R"
 UA = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/124", "Accept": "application/json"}
 PH = dict(UA, **{"X-API-Key": PIN_KEY})
-CT = datetime.timezone(datetime.timedelta(hours=-5))
+CT = __import__("zoneinfo").ZoneInfo("America/Chicago")
 OUT = "props_paper.jsonl"
 norm = lambda s: re.sub(r"[^a-z0-9]", "", __import__("unicodedata").normalize("NFKD", s or "").encode("ascii", "ignore").decode().lower())   # 10/21: accents (Dončić) broke matching
 dec = lambda o: 1 + (o / 100 if o > 0 else 100 / -o)

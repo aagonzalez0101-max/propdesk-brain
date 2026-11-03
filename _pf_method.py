@@ -14,7 +14,7 @@ import sys, datetime, collections
 import _ppcache as C, _lineflash as F
 import sqlite3
 
-CT = datetime.timezone(datetime.timedelta(hours=-5))
+CT = __import__("zoneinfo").ZoneInfo("America/Chicago")
 ESPN = {"NYK": "NY", "GSW": "GS", "SAS": "SA", "NOP": "NO", "UTA": "UTAH", "WAS": "WSH"}   # 10/30: PP's team code vs our box's (Maxey h2h vs NYK came back empty -- it's really "NY")
 ZONE_CLS = {"dunk": "rim", "lob dunk": "rim", "putback": "rim", "rim": "rim", "lob layup": "rim", "hook": "paint",
             "floater": "paint", "mid": "mid", "three": "three"}

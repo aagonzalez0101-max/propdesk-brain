@@ -14,7 +14,7 @@ Rules built in (all measured or user-set):
 """
 import sys, os, json, glob, itertools, datetime
 
-CT = datetime.timezone(datetime.timedelta(hours=-5))
+CT = __import__("zoneinfo").ZoneInfo("America/Chicago")
 BE = {"UD": 1 / 3.5 ** 0.5, "PP": 1 / 3.0 ** 0.5}
 PAY2 = {"UD": 3.5, "PP": 3.0}
 PAY3 = {"UD": 6.5, "PP": 5.0}           # PP 3-pick power 5x, UD 3-pick 6.5x

@@ -11,7 +11,7 @@ dunk big   = a big who averaged 0.8+ dunks a game that season (the lob finishers
 import sys, json, sqlite3, collections, statistics as st, datetime, urllib.request, time
 
 DB = "sports.db"
-CT = datetime.timezone(datetime.timedelta(hours=-5))
+CT = __import__("zoneinfo").ZoneInfo("America/Chicago")
 
 
 def season_profiles(c):

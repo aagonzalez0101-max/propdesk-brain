@@ -14,7 +14,7 @@ import _props as P
 H = {"User-Agent": "Mozilla/5.0"}
 S = "https://statsapi.mlb.com/api/v1"
 SEASON = 2026
-CT = datetime.timezone(datetime.timedelta(hours=-5))
+CT = __import__("zoneinfo").ZoneInfo("America/Chicago")
 CACHE = "_mlb_cache"
 os.makedirs(CACHE, exist_ok=True)
 jget = lambda path, **p: requests.get(S + path, params=p, headers=H, timeout=40).json()

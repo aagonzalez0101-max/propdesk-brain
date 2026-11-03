@@ -4,7 +4,7 @@ import sys, os, json, glob, datetime, collections, requests
 import _direction as D, _dir_search as S
 
 DAY = sys.argv[1]
-CT = datetime.timezone(datetime.timedelta(hours=-5))
+CT = __import__("zoneinfo").ZoneInfo("America/Chicago")
 lines, seen = [], set()
 for f in __import__("_arch").files(os.path.join("lines_archive", "*", "pp_*_*.json")):
     lg = int(os.path.basename(f).split("_")[1])

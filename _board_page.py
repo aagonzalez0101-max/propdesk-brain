@@ -5,7 +5,7 @@ what should hit and what should not. Republish after every screen:
 """
 import sys, json, datetime
 
-CT = datetime.timezone(datetime.timedelta(hours=-5))
+CT = __import__("zoneinfo").ZoneInfo("America/Chicago")
 rows = []
 for f in sys.argv[1:] or ["_soccer_board.json"]:
     rows += json.load(open(f, encoding="utf-8"))

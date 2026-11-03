@@ -15,7 +15,7 @@ That is the proof we were early and right -- graded per alert, plus the actual r
 """
 import os, sys, re, json, glob, time, datetime, subprocess
 
-CT = datetime.timezone(datetime.timedelta(hours=-5))
+CT = __import__("zoneinfo").ZoneInfo("America/Chicago")
 LOG = "big_alerts.jsonl"
 norm = lambda s: re.sub(r"[^a-z0-9]", "", (s or "").lower())
 SPORTS = {"NFL": (9, 889), "NHL": (8, 1456), "NBA": (7, 487), "WNBA": (3, 578), "MLB": (2, 246), "CFB": (15, 880)}

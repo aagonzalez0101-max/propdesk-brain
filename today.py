@@ -11,7 +11,7 @@ import sys, json, glob, datetime, subprocess, io
 sys.path.insert(0, "betting")
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace",
                               line_buffering=True)
-CT = datetime.timezone(datetime.timedelta(hours=-5))
+CT = __import__("zoneinfo").ZoneInfo("America/Chicago")
 today = datetime.datetime.now(CT).date().isoformat()
 dec = lambda a: 1 + a / 100 if a > 0 else 1 + 100 / -a
 amer = lambda p: round(-100 * p / (1 - p)) if p >= 0.5 else round(100 * (1 - p) / p)

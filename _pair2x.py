@@ -18,7 +18,7 @@ try:                                                    # 10/10 user: everything
     from zoneinfo import ZoneInfo
     CT = ZoneInfo("America/Chicago")
 except Exception:
-    CT = datetime.timezone(datetime.timedelta(hours=-5))
+    CT = __import__("zoneinfo").ZoneInfo("America/Chicago")
 now = datetime.datetime.now(datetime.timezone.utc)
 today = datetime.datetime.now(CT).date().isoformat()
 LG = {"NHL": 8, "WNBA": 3, "NBA": 7, "NFL": 9, "CFB": 15, "CS2": 265, "SOCCER": 82, "NBAP": 237}

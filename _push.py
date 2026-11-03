@@ -9,7 +9,7 @@ One call sends a pick or alert everywhere he looks:
 """
 import sys, os, json, datetime, urllib.request
 
-CT = datetime.timezone(datetime.timedelta(hours=-5))
+CT = __import__("zoneinfo").ZoneInfo("America/Chicago")
 
 
 def push(title, body, color=0x1DB954):

@@ -9,7 +9,7 @@ All PAPER -- nothing here is a bet (esports = paper until a rule proves itself f
 """
 import os, sys, json, glob, time, datetime, subprocess
 
-CT = datetime.timezone(datetime.timedelta(hours=-5))
+CT = __import__("zoneinfo").ZoneInfo("America/Chicago")
 PY = sys.executable
 ENV = dict(os.environ, PYTHONIOENCODING="utf-8")
 LOG = os.path.join("daily_log", "esports_overnight.txt")

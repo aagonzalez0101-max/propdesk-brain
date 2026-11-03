@@ -10,7 +10,7 @@ Step 2 (next): free results feed per league -> Elo + rest/travel (WNBA measured:
 import sys, json, datetime, time, requests
 import _kbo as K
 
-CT = datetime.timezone(datetime.timedelta(hours=-5))
+CT = __import__("zoneinfo").ZoneInfo("America/Chicago")
 LEAGUES = {382: "Euroleague", 268: "ABA", 197721: "Japan B1", 203908: "Chile LNB", 280: "Australia NBL", 197913: "Turkey BSL",
            208618: "Lithuania LKL"}
 OUT = "intl_hoops_lines.jsonl"

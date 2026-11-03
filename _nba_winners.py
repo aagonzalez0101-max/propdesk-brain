@@ -11,7 +11,7 @@ Bet type (DK closing lines backtest): ML when the pick is a 7.5+ favorite (win, 
 import sqlite3, statistics as st, collections, datetime, requests, json, sys
 sys.path.insert(0, '.')
 import _sides as S
-DAY = sys.argv[1] if len(sys.argv) > 1 else datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=-6))).date().isoformat()
+DAY = sys.argv[1] if len(sys.argv) > 1 else datetime.datetime.now(__import__("zoneinfo").ZoneInfo("America/Chicago")).date().isoformat()
 OUTF = 'data/nba_winners_%s.json' % DAY
 c = sqlite3.connect('sports.db'); H = {'User-Agent': 'Mozilla/5.0'}
 K = 5; HOME = 2.0; INJ = 0.6
@@ -54,7 +54,7 @@ for e in sb['events']:
     side = {x['homeAway']: x['team']['abbreviation'] for x in comp['competitors']}
     for x in comp['competitors']:
         abbr[x['team']['displayName']] = x['team']['abbreviation']
-    t = datetime.datetime.fromisoformat(e['date'].replace('Z', '+00:00')).astimezone(datetime.timezone(datetime.timedelta(hours=-6)))
+    t = datetime.datetime.fromisoformat(e['date'].replace('Z', '+00:00')).astimezone(__import__("zoneinfo").ZoneInfo("America/Chicago"))
     slate.append(dict(home=side['home'], away=side['away'], time=t.strftime('%I:%M %p').lstrip('0'), name=e['shortName']))
 inj = requests.get('https://site.api.espn.com/apis/site/v2/sports/basketball/nba/injuries', headers=H, timeout=20).json()
 OUT = collections.defaultdict(list)

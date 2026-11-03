@@ -4,7 +4,7 @@
   C) same-team legs: do they win/lose together (correlation) ?"""
 import json, datetime, collections, itertools, random
 import _dir_search as D
-CT = datetime.timezone(datetime.timedelta(hours=-5))
+CT = __import__("zoneinfo").ZoneInfo("America/Chicago")
 lo = D.lodo_out(D.graded())
 
 

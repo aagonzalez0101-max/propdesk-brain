@@ -74,7 +74,7 @@ for g in sorted(games, key=lambda x: x["gameDate"]):
                     pen={t["team"]["name"]: pen_cache[t["team"]["id"]]["era"] for t in (A, H)}))
 
 json.dump(out, open("_slatecheck_%s.json" % day, "w"), indent=1)
-CT = LC.dt.timezone(LC.dt.timedelta(hours=-5))
+CT = __import__("zoneinfo").ZoneInfo("America/Chicago")
 print("SLATE CHECK  %s  (%d games)\n" % (day, len(out)))
 for r in sorted(out, key=lambda x: -(x["edge"] or -1)):
     t = LC.dt.datetime.fromisoformat(r["time"].replace("Z", "+00:00")).astimezone(CT)

@@ -74,7 +74,7 @@ def main(leagues):
     try:
         import _notify, datetime as _d
         mine = set()
-        today = _d.datetime.now(_d.timezone(_d.timedelta(hours=-5))).date().isoformat()
+        today = _d.datetime.now(__import__("zoneinfo").ZoneInfo("America/Chicago")).date().isoformat()
         for fn_ in ("live_paper.jsonl",):
             for l_ in open(fn_, encoding="utf-8"):
                 r_ = json.loads(l_)
@@ -94,7 +94,7 @@ def main(leagues):
         if moves and len(moves) > len(hot):
             with open(os.path.join("daily_log", "feed.txt"), "a", encoding="utf-8") as f_:
                 f_.write("%s   (+%d other PP line moves/pulls this hour -- not on your bets/card)\n" % (
-                    _d.datetime.now(_d.timezone(_d.timedelta(hours=-5))).strftime("%m-%d %I:%M %p"), len(moves) - len(hot)))
+                    _d.datetime.now(__import__("zoneinfo").ZoneInfo("America/Chicago")).strftime("%m-%d %I:%M %p"), len(moves) - len(hot)))
     except Exception as e:
         print("notify:", e)
     for m in moves[:60]:

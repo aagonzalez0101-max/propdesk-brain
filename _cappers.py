@@ -6,7 +6,7 @@ Every sport, paused or not. The claims still get verified by hand against statsa
 (memory: reference_capper_channels). Free: YouTube RSS + youtube-transcript-api.
 """
 import sys, re, datetime, urllib.request
-CT = datetime.timezone(datetime.timedelta(hours=-5))
+CT = __import__("zoneinfo").ZoneInfo("America/Chicago")
 CH = {"2ez": "UCSffCjZtU0bmws1QspHs74Q", "aces": "UCRmEURDsXteG8V-LG_fG_Fg"}
 
 day = next((a for a in sys.argv[1:] if len(a) == 10), datetime.datetime.now(CT).date().isoformat())

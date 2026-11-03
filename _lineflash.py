@@ -16,7 +16,7 @@ checks of the bet bar (CLAUDE.md) to Discord/phone, so a 2-pick can be built min
 import sys, os, io, json, time, sqlite3, datetime, contextlib, subprocess, collections, statistics as st
 import _nba_finder as NF
 
-CT = datetime.timezone(datetime.timedelta(hours=-5))
+CT = __import__("zoneinfo").ZoneInfo("America/Chicago")
 SEEN = os.path.join("data", "lineflash_seen.json")
 P_MIN = 0.62
 NEWS = []          # legs far off the line (PP likely priced news we don't have) -- printed for research, never pushed

@@ -72,7 +72,7 @@ def snap():
         rows.append(dict(sport=p["sport_id"], player=p["last_name"] or p["first_name"], first=p["first_name"],
                          team_id=a.get("team_id"), match_id=a.get("match_id"), stat=ap.get("display_stat"),
                          line=l["stat_value"], options={o["choice"]: o.get("payout_multiplier") for o in l["options"]}))
-    day = datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=-5))).strftime("%Y-%m-%d_%H%M")
+    day = datetime.datetime.now(__import__("zoneinfo").ZoneInfo("America/Chicago")).strftime("%Y-%m-%d_%H%M")
     json.dump(dict(games=d.get("games"), lines=rows), open("esports_lines/%s.json" % day, "w", encoding="utf-8"))
     print("saved", len(rows), "esports lines")
 

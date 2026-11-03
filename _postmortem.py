@@ -16,7 +16,7 @@ Lines: venue split -- PP lines graded separately from Underdog (UD 0.5 'lopsided
 """
 import sys, os, json, re, sqlite3, datetime, collections, requests, statistics as st
 
-CT = datetime.timezone(datetime.timedelta(hours=-5))
+CT = __import__("zoneinfo").ZoneInfo("America/Chicago")
 DAY = sys.argv[1] if len(sys.argv) > 1 else (datetime.datetime.now(CT).date() - datetime.timedelta(days=1)).isoformat()
 NHL = "https://api-web.nhle.com/v1"
 norm = lambda s: re.sub(r"[^a-z0-9]", "", (s or "").lower())

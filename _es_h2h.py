@@ -15,7 +15,7 @@ RULES (backtests 10/26, memory project_cs2_sports_rules):
 """
 import sys, os, re, json, glob, datetime, collections, statistics as st, unicodedata
 
-CT = datetime.timezone(datetime.timedelta(hours=-5))
+CT = __import__("zoneinfo").ZoneInfo("America/Chicago")
 LOG = "es_h2h_paper.jsonl"
 LEAGUES = {"cs2": 265, "val": 159, "dota": 174}
 
@@ -100,7 +100,7 @@ def board(game, day):
     import _ppcache
     d = _ppcache.projections(LEAGUES[game], 900)
     P = {i["id"]: i["attributes"] for i in d.get("included", []) if i["type"] == "new_player"}
-    lo = datetime.datetime.fromisoformat(day + "T00:00:00-05:00"); hi = lo + datetime.timedelta(hours=30)
+    lo = datetime.datetime.fromisoformat(day).replace(tzinfo=__import__("zoneinfo").ZoneInfo("America/Chicago")); hi = lo + datetime.timedelta(hours=30)
     now = datetime.datetime.now(datetime.timezone.utc)
     for x in d.get("data", []):
         a = x["attributes"]

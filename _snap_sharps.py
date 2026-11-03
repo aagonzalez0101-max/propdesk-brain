@@ -7,7 +7,7 @@ measure: where the sharps were when PP posted a line, how they moved by game tim
 import os, json, datetime
 import _props as P, _mismatch as M
 
-CT = datetime.timezone(datetime.timedelta(hours=-5))
+CT = __import__("zoneinfo").ZoneInfo("America/Chicago")
 now = datetime.datetime.now(CT)
 rows = []
 for sp, lid in M.PIN_LEAGUE.items():

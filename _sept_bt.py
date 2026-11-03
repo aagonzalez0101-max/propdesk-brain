@@ -3,7 +3,7 @@
   MLB  (prop_graded.jsonl, 9/1-9/20)      -> our MLB prop picks at the book's own odds, by market / side / confidence
 NHL started 9/29; WNBA September prop lines were never archived -> neither can be backtested before 9/29."""
 import json, datetime, collections, math
-CT = datetime.timezone(datetime.timedelta(hours=-5))
+CT = __import__("zoneinfo").ZoneInfo("America/Chicago")
 
 # ---- CS2
 cs = {}

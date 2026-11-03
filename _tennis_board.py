@@ -8,7 +8,7 @@ Never a straight bet by itself: tennis moneylines have no standalone edge. Use 2
 """
 import json, os, datetime, requests
 
-CT = datetime.timezone(datetime.timedelta(hours=-5))
+CT = __import__("zoneinfo").ZoneInfo("America/Chicago")
 imp = lambda p: 100 / (p + 100) if p > 0 else -p / (-p + 100)
 amer = lambda q: ("-%d" % round(100 * q / (1 - q))) if q >= 0.5 else "+%d" % round(100 * (1 - q) / q)
 

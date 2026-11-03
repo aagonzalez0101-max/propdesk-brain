@@ -20,7 +20,7 @@ try:                                                    # 10/10 user: everything
     from zoneinfo import ZoneInfo
     CT = ZoneInfo("America/Chicago")
 except Exception:
-    CT = datetime.timezone(datetime.timedelta(hours=-5))
+    CT = __import__("zoneinfo").ZoneInfo("America/Chicago")
 DONE_F = "_brain_done.json"
 # (name, CT slot, commands, hard timeout s, typical runtime s -- the laptop measured grade ~63 min, lines ~35 min)
 # 10/10 user: "games start at 11 AM" -> the morning card must be out by ~8:15, with a last pre-11 AM check. Night games get a 3 PM pass.

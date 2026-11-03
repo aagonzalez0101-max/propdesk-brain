@@ -12,7 +12,7 @@ Limits: PP's free feed is cached 3 min (429s otherwise) -- we see each PP move u
 import sys, os, json, time, datetime
 import _xcheck as X, _mismatch as M, _single_check as SC, _ppcache
 
-CT = datetime.timezone(datetime.timedelta(hours=-5))
+CT = __import__("zoneinfo").ZoneInfo("America/Chicago")
 LOG = "live_snipe.jsonl"
 
 

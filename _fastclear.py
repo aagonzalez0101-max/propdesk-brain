@@ -16,7 +16,7 @@ import _nba_finder as NF, _nba_board as B
 
 SNAP = os.path.join("data", "prop_snap.json")
 SEEN = os.path.join("data", "fastclear_seen.json")
-CT = datetime.timezone(datetime.timedelta(hours=-5))
+CT = __import__("zoneinfo").ZoneInfo("America/Chicago")
 
 
 def one_pass():

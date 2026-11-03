@@ -15,7 +15,7 @@ NHL UNDER is NOT offered -- every version tested lost (25-50%).
 import json, math, collections, sys, os, sqlite3, datetime
 import numpy as np
 
-CT = datetime.timezone(datetime.timedelta(hours=-5))
+CT = __import__("zoneinfo").ZoneInfo("America/Chicago")
 TH = 0.58
 L2 = 0.10
 OFFER = {("NHL", "over"), ("WNBA", "over"), ("WNBA", "under"), ("NBA", "over"), ("NBA", "under"), ("NHL", "under")}

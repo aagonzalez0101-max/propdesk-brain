@@ -64,7 +64,7 @@ def test(league):
     lines = {}
     for pl, stat, line, start, ls in L.execute("SELECT player, stat, line, start, last_seen FROM pp WHERE league=? AND kind='standard' ORDER BY last_seen", (LG[league],)):
         if parts(stat) and start and (ls or "") <= start.replace("T", " ")[:19] + "z" and "+" not in pl:
-            d = datetime.datetime.fromisoformat(start).astimezone(datetime.timezone(datetime.timedelta(hours=-5))).date().isoformat()
+            d = datetime.datetime.fromisoformat(start).astimezone(__import__("zoneinfo").ZoneInfo("America/Chicago")).date().isoformat()
             lines[(pl, stat, d)] = float(line)
     R = []
     for (pl, stat, d), line in lines.items():

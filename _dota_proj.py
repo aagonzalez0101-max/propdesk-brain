@@ -5,7 +5,7 @@ No graded Dota line history exists yet (archive started 10/7) -> PAPER until ~15
 import json, random, re, datetime, collections, os
 import _props as P
 
-CT = datetime.timezone(datetime.timedelta(hours=-5))
+CT = __import__("zoneinfo").ZoneInfo("America/Chicago")
 norm = lambda s: re.sub(r"[^a-z0-9]", "", (s or "").lower())
 games = collections.defaultdict(list)
 for l in open("dota_matches.jsonl", encoding="utf-8"):

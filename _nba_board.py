@@ -15,7 +15,7 @@ from concurrent.futures import ThreadPoolExecutor
 import _fanduel as F, _props as PR
 
 N = NormalDist()
-CT = datetime.timezone(datetime.timedelta(hours=-5))
+CT = __import__("zoneinfo").ZoneInfo("America/Chicago")
 norm = lambda s: re.sub(r"[^a-z]", "", __import__("unicodedata").normalize("NFKD", s or "").encode("ascii", "ignore").decode().lower())   # 10/21: "Dončić" was "doni"
 FD_STAT = {"points": "Points", "rebounds": "Rebounds", "assists": "Assists", "made threes": "3-PT Made", "pts + reb + ast": "Pts+Rebs+Asts",
            "pts + reb": "Pts+Rebs", "pts + ast": "Pts+Asts", "reb + ast": "Rebs+Asts", "steals": "Steals", "blocks": "Blocked Shots"}

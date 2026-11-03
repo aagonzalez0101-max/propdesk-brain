@@ -6,7 +6,7 @@ Windows task "PropDesk PBP" runs this at 6:00 AM CT: ingest the last two days of
 """
 import os, sys, datetime, subprocess
 
-CT = datetime.timezone(datetime.timedelta(hours=-5))
+CT = __import__("zoneinfo").ZoneInfo("America/Chicago")
 os.chdir(os.path.dirname(os.path.abspath(__file__)))
 ENV = dict(os.environ, PYTHONIOENCODING="utf-8")
 LOG = os.path.join("daily_log", "laptop_nightly.txt")

@@ -20,7 +20,7 @@ For every PP line tonight:
 import sys, json, re, sqlite3, datetime, collections, statistics as st, urllib.request
 import _nba_board as B, _nba_finder as NF, _nba_dunks as DK
 
-CT = datetime.timezone(datetime.timedelta(hours=-5))
+CT = __import__("zoneinfo").ZoneInfo("America/Chicago")
 ESPN = {"NYK": "NY", "GSW": "GS", "SAS": "SA", "NOP": "NO", "UTA": "UTAH", "WAS": "WSH"}
 PAPER = "nba_value_paper.jsonl"
 BAR = {"standard": .58, "demon": .50, "goblin": .85}       # std = 2-pick 3x break-even 57.7%

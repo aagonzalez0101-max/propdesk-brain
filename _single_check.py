@@ -13,7 +13,7 @@ Measured context: singles at -120 need 54.5%; a 3x 2-pick needs 57.7%/leg; Kelly
 import sys, os, re, json, datetime, sqlite3
 import _fanduel as F
 
-CT = datetime.timezone(datetime.timedelta(hours=-5))
+CT = __import__("zoneinfo").ZoneInfo("America/Chicago")
 LOG = "single_check.jsonl"
 LEG = re.compile(r"^(.+?)\s+([OU])\s?(\d+(?:\.\d+)?)\s+(.+?)(?:\s*\(.*\))?$")
 NBA_TABS = ("player-points", "player-rebounds", "player-assists", "player-threes", "player-combos")

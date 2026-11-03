@@ -9,7 +9,7 @@ so each rule (projection side, tiers, unders, new team, roster cuts, book price,
 import sys, os, json, time, datetime, sqlite3, collections, statistics as st, urllib.request
 import _nba_board as B, _nba_finder as NF, _props as PR
 
-CT = datetime.timezone(datetime.timedelta(hours=-5))
+CT = __import__("zoneinfo").ZoneInfo("America/Chicago")
 LEGS, SLIPS = "nba_paper_legs.jsonl", "nba_paper_slips.jsonl"
 ESPN = {"NYK": "NY", "GSW": "GS", "SAS": "SA", "NOP": "NO", "UTA": "UTAH", "WAS": "WSH"}
 MAIN = {"Points", "Rebounds", "Assists", "3-PT Made"}

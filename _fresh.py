@@ -10,7 +10,7 @@ Alert = Windows desktop notification + site/fresh.json + daily_log/fresh.log. Al
 """
 import os, sys, json, datetime, subprocess
 
-CT = datetime.timezone(datetime.timedelta(hours=-5))
+CT = __import__("zoneinfo").ZoneInfo("America/Chicago")
 SEEN = "_fresh_seen.json"
 PY = sys.executable
 

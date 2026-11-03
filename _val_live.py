@@ -15,7 +15,7 @@ UA = {"User-Agent": "Mozilla/5.0 Chrome/124", "Accept": "application/json"}
 PPUA = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124 Safari/537.36",
         "Accept": "application/json"}
 g = lambda u, h=UA: json.loads(urllib.request.urlopen(urllib.request.Request(u, headers=h), timeout=60).read())
-CT = datetime.timezone(datetime.timedelta(hours=-5))
+CT = __import__("zoneinfo").ZoneInfo("America/Chicago")
 OUT = "val_paper.jsonl"
 ALL = "val_priced_all.jsonl"
 VERSION = "v1"

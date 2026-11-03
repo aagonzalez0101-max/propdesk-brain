@@ -12,7 +12,7 @@ import _dir_search as D
 START = float(sys.argv[1]) if len(sys.argv) > 1 else 10.0
 PCT = float(sys.argv[2]) if len(sys.argv) > 2 else 0.05
 MODE = sys.argv[3] if len(sys.argv) > 3 else "std"
-CT = datetime.timezone(datetime.timedelta(hours=-5))
+CT = __import__("zoneinfo").ZoneInfo("America/Chicago")
 FROM = "2026-09-29"
 
 legs = []

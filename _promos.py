@@ -10,7 +10,7 @@ prices the promo leg with the sharp books when a price exists.
 import os, sys, json, glob, datetime, subprocess
 import _arch
 
-CT = datetime.timezone(datetime.timedelta(hours=-5))
+CT = __import__("zoneinfo").ZoneInfo("America/Chicago")
 LOG = "promos.jsonl"
 LEAGUE = {2: "MLB", 3: "WNBA", 7: "NBA", 8: "NHL", 9: "NFL", 15: "CFB", 82: "SOCCER", 121: "LoL", 159: "VAL", 174: "Dota2", 265: "CS2",
           131: "GOLF", 237: "NBAP", 1: "PGA", 135: "KBO", 298: "NPB"}

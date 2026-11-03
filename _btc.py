@@ -12,7 +12,7 @@ import bisect, csv, datetime, json, math, os, sys, time, urllib.request
 F = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "btc_1m.csv")
 URL = "https://api.exchange.coinbase.com/products/BTC-USD/candles?granularity=60&start=%s&end=%s"
 g = lambda u: json.load(urllib.request.urlopen(urllib.request.Request(u, headers={"User-Agent": "Mozilla/5.0"}), timeout=30))
-CT = datetime.timezone(datetime.timedelta(hours=-5))
+CT = __import__("zoneinfo").ZoneInfo("America/Chicago")
 
 
 def load():
