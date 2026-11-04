@@ -41,13 +41,23 @@ def build(day, roll):
     now = datetime.datetime.now(datetime.timezone.utc)
     lo = datetime.datetime.fromisoformat(day).replace(tzinfo=__import__("zoneinfo").ZoneInfo("America/Chicago"))
     hi = lo + datetime.timedelta(hours=30)                 # the CT day plus the overnight Asia/EU morning
+    fn = os.path.join("cards", "%s__cs2.json" % day)
+    # 11/4: the card used to LOCK whole once any leg started, so lines posted later that day (most CS2 lines post ~6h before
+    # the match, matches run 3 AM-2 PM CT) never became slips. Now: slips with a started leg are FROZEN and kept, their
+    # players are excluded, and the rest of the board is rebuilt from what is still open.
+    kept, used = [], set()
+    if os.path.exists(fn) and "--force" not in sys.argv:
+        old = json.load(open(fn, encoding="utf-8"))
+        for s in old.get("slips", []):
+            if any(datetime.datetime.fromisoformat(g["start"].replace("Z", "+00:00")) <= now for g in s["legs"]):
+                kept.append(s); used |= {g["player"] for g in s["legs"]}
     legs, seen = [], set()
     for l in open(PRICED, encoding="utf-8"):
         r = json.loads(l)
         if not qualifies(r) or r.get("result") is not None:
             continue
         st = datetime.datetime.fromisoformat(r["start"].replace("Z", "+00:00"))
-        if not (max(lo, now) <= st < hi) or r["player"] in seen:
+        if not (max(lo, now) <= st < hi) or r["player"] in seen or r["player"] in used:
             continue
         seen.add(r["player"]); legs.append(r)
     legs.sort(key=lambda r: r["start"])                    # by START TIME, never by edge
@@ -62,16 +72,14 @@ def build(day, roll):
                           legs=[{k: x.get(k) for k in ("player", "team", "match", "start", "stat", "kind", "maps", "line", "pp_line", "side", "mult", "edge", "model_p")}
                                 for x in (a, b)]))
     stake = round(roll * 0.05, 2)
-    fn = os.path.join("cards", "%s__cs2.json" % day)
-    if os.path.exists(fn) and "--force" not in sys.argv:
-        old = json.load(open(fn, encoding="utf-8"))
-        if any(datetime.datetime.fromisoformat(g["start"].replace("Z", "+00:00")) <= now for s in old["slips"] for g in s["legs"]):
-            print("CS2 card %s locked (legs started)" % fn); return
+    if kept:
+        print("CS2 card %s: %d slip(s) frozen (legs started), %d new" % (fn, len(kept), len(slips)))
+    slips = kept + slips
     os.makedirs("cards", exist_ok=True)
     json.dump(dict(day=day, roll=roll, stake=stake, slips=slips), open(fn, "w", encoding="utf-8"), indent=1)
     print("CS2 PAPER SLIPS (NOT A BET) %s -- rule v2: UD vs PP line gap >= 1.5, UD side toward PP, every slip, $%.2f each (5%% of $%.2f)" % (day, stake, roll))
     if not slips:
-        print("  no qualifying pairs yet (legs post closer to match time -- the card reruns 09:15 and 21:00)")
+        print("  no qualifying pairs yet (CS2 lines post ~6h before the match -- the card reruns 01:30, 04:30, 07:45, 10:00, 15:00, 21:00 CT)")
     for i, s in enumerate(slips, 1):
         print("  slip %d  pays %.2fx" % (i, s["pay"]))
         for g in s["legs"]:
@@ -95,13 +103,20 @@ def dog_under(r):
 def build_dog(day):
     now = datetime.datetime.now(datetime.timezone.utc)
     lo = datetime.datetime.fromisoformat(day).replace(tzinfo=__import__("zoneinfo").ZoneInfo("America/Chicago")); hi = lo + datetime.timedelta(hours=30)
+    fn = os.path.join("cards", "%s__cs2u.json" % day)
+    # 11/4: a rerun used to OVERWRITE the file, so slips whose legs had started vanished before grading. Keep them frozen.
+    kept, used, used_m = [], set(), set()
+    if os.path.exists(fn):
+        for s in json.load(open(fn, encoding="utf-8")).get("slips", []):
+            if any(datetime.datetime.fromisoformat(g["start"].replace("Z", "+00:00")) <= now for g in s["legs"]):
+                kept.append(s); used |= {g["player"] for g in s["legs"]}; used_m |= {g["match"] for g in s["legs"]}
     legs, seen = [], set()
     for l in open(PAPER, encoding="utf-8"):
         r = json.loads(l)
         if r.get("result") is not None or not r.get("start") or not dog_under(r):
             continue
         st = datetime.datetime.fromisoformat(r["start"].replace("Z", "+00:00"))
-        if not (max(lo, now) <= st < hi) or r["player"] in seen:
+        if not (max(lo, now) <= st < hi) or r["player"] in seen or r["player"] in used or r["match"] in used_m:
             continue
         seen.add(r["player"]); legs.append(r)
     # 10/26: one leg per MATCH across the whole card -- 10/25 FUT vs Liquid put 5 unders on one match and the dog fought a long
@@ -122,7 +137,7 @@ def build_dog(day):
         slips.append(dict(venue="PP", n=2, pay=3.0, rule="v3 underdog under",
                           legs=[{k: x.get(k) for k in ("player", "team", "match", "start", "stat", "kind", "maps", "line", "pp_line", "side", "edge", "map_winp", "model_p")}
                                 for x in (a, b)]))
-    fn = os.path.join("cards", "%s__cs2u.json" % day)
+    slips = kept + slips
     os.makedirs("cards", exist_ok=True)
     json.dump(dict(day=day, rule="v3 underdog under", slips=slips), open(fn, "w", encoding="utf-8"), indent=1)
     print("CS2 v3 UNDERDOG UNDER (PAPER) %s: %d slips (rule backtest 79-37, 68%%)" % (day, len(slips)))

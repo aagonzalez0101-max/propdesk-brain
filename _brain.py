@@ -29,8 +29,12 @@ DONE_F = "_brain_done.json"
 DAILY = [("grade_sports", (0, 45), [["_daily.py", "grade_sports"]], 7200, 3600),
          ("grade", (6, 30), [["_daily.py", "grade_es"]], 7200, 4200),
          ("lines_am", (7, 45), [["_daily.py", "lines"]], 5400, 2400),
-         ("lines_10", (10, 0), [["_dir_search.py", "score"], ["_cs2_live.py", "card"], ["_dota_proj.py"], ["_pair2x.py"]], 3000, 900),
-         ("lines_mid", (15, 0), [["_dir_search.py", "score"], ["_cs2_live.py", "card"], ["_dota_proj.py"], ["_pair2x.py"]], 3600, 1200),
+         # 11/4: CS2 lines post ~6h before the match (matches run 3 AM-2 PM CT; posting peaks 7 PM, 1-5 AM, 10 AM, 4 PM) --
+         # the slip card used to build only at 7:45 / 9 PM. Two overnight CS2-only passes + the card on every CS2 pricing pass.
+         ("cs2_night", (1, 30), [["_cs2_live.py", "card"], ["_cs2_card.py"]], 1800, 600),
+         ("cs2_early", (4, 30), [["_cs2_live.py", "card"], ["_cs2_card.py"]], 1800, 600),
+         ("lines_10", (10, 0), [["_dir_search.py", "score"], ["_cs2_live.py", "card"], ["_cs2_card.py"], ["_dota_proj.py"], ["_pair2x.py"]], 3000, 900),
+         ("lines_mid", (15, 0), [["_dir_search.py", "score"], ["_cs2_live.py", "card"], ["_cs2_card.py"], ["_dota_proj.py"], ["_pair2x.py"]], 3600, 1200),
          # 10/14 user: "most of the wins were here" (tacos + preseason bench unders post in the afternoon) -> a pre-game evening card
          ("lines_eve", (17, 0), [["_promos.py"], ["_dir_search.py", "score"], ["_pair2x.py"]], 2400, 1200),
          ("lines_pm", (21, 0), [["_daily.py", "lines"]], 5400, 2400)]
@@ -110,7 +114,7 @@ def main(minutes):
             # 10/10 user: "push it". LINE-RELEASE SCANNER every 30 min: early PP lines are the best ones (Hall/Talbot got pulled or raised
             # within hours). Re-score picks + CS2 on the fresh board; post ONLY slips that are new (NEW_ONLY), so Discord stays quiet otherwise.
             print("%s CT -- release scan" % now.strftime("%H:%M"), flush=True)
-            for c in (["_dir_search.py", "score"], ["_cs2_live.py", "card"]):
+            for c in (["_dir_search.py", "score"], ["_cs2_live.py", "card"], ["_cs2_card.py"]):   # 11/4: + the CS2 slip card on every scan
                 run(c, 600)
             os.environ["NEW_ONLY"] = "1"; os.environ["SKIP_GOBLINS"] = "1"
             run(["_pair2x.py"], 900)
