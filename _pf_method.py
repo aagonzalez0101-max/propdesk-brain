@@ -88,6 +88,41 @@ def teammate_already_out(c, teammate, since):
     return not any((m or 0) > 5 and not d for m, d in rows)
 
 
+_ALLOWED = {}
+
+
+def opp_allowed(c, expr, opp):
+    """11/5 user: "pickfinder says 'allows 34 rebounds a game, ranked #23'". Per-game team total of this stat that
+    opponents put up against `opp` this season, and its rank (1 = allows the MOST = softest)."""
+    if expr not in _ALLOWED:
+        per = collections.defaultdict(list)
+        for o, v in c.execute(
+                "select b.opp, sum(%s) from nba_box b join nba_games g on g.game_id=b.game_id where g.season='2026-27' "
+                "and g.stype='regular' and (b.dnp=0 or b.dnp is null) group by b.game_id, b.team" % expr):
+            if v is not None:
+                per[o].append(v)
+        avg = {o: sum(v) / len(v) for o, v in per.items() if v}
+        order = sorted(avg, key=avg.get, reverse=True)
+        _ALLOWED[expr] = (avg, {o: i + 1 for i, o in enumerate(order)}, len(order))
+    avg, rk, n = _ALLOWED[expr]
+    return (avg.get(opp), rk.get(opp), n) if opp in avg else None
+
+
+def with_without(c, player, team, expr, teammate, line):
+    """11/5 user: "they'll say add more rebounds bc so and so are out". His numbers this season + last (same team) in games
+    the teammate PLAYED (5+ min) vs games he did NOT. Returns (avg_with, n_with, avg_without, n_without, over_without)."""
+    rows = c.execute(
+        "select b.game_id, %s from nba_box b join nba_games g on g.game_id=b.game_id where b.player=? and b.team=? "
+        "and g.stype='regular' and g.season in ('2025-26','2026-27') and (b.dnp=0 or b.dnp is null) and b.min>0" % expr,
+        (player, team)).fetchall()
+    played = {r[0] for r in c.execute("select game_id from nba_box where player=? and team=? and min>5 and (dnp=0 or dnp is null)",
+                                      (teammate, team))}
+    w = [v for gid, v in rows if gid in played]; wo = [v for gid, v in rows if gid not in played]
+    if not w or not wo:
+        return None
+    return (sum(w) / len(w), len(w), sum(wo) / len(wo), len(wo), sum(v > line for v in wo))
+
+
 def run(day):
     c = sqlite3.connect("sports.db")
     F.load_outs(c)
@@ -167,6 +202,19 @@ def run(day):
             teammate_note = "; ".join(parts)
         print("   L5 %s | L%d(season) %s | h2h vs %s %s (%.0f%%) | teammates OUT: %s" % (
             g["l5"], g["n_season"], g["l10"], g["opp"], g["h2h"], 100 * g["h2h_rate"], teammate_note))
+        e = STAT[g["stat"]]
+        oa = opp_allowed(c, e, g["opp"])
+        if oa and oa[0] is not None:
+            soft = oa[1] <= oa[2] / 3; tough = oa[1] > 2 * oa[2] / 3
+            agree = (soft and g["side"] == "over") or (tough and g["side"] == "under")
+            against = (tough and g["side"] == "over") or (soft and g["side"] == "under")
+            print("   %s allows %.1f %s/game to opponents, #%d of %d (1 = allows the most)%s" % (
+                g["opp"], oa[0], g["stat"].lower(), oa[1], oa[2], "  -> AGREES" if agree else "  -> AGAINST" if against else ""))
+        for tm in g["teammates_out"] or []:
+            ww = with_without(c, g["player"], g["team"], e, tm, g["line"])
+            if ww:
+                print("   with %s: %.1f (%d g) | WITHOUT: %.1f (%d g), over %s in %d/%d" % (
+                    tm, ww[0], ww[1], ww[2], ww[3], g["line"], ww[4], ww[3]))
         if g["zone_detail"]:
             for share, z, label, rk, n in g["zone_detail"]:
                 fg = g["own_fg"].get(z)
