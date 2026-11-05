@@ -22,5 +22,6 @@ if __name__ == "__main__":
     os.makedirs("daily_log", exist_ok=True)
     today = datetime.datetime.now(CT).date()
     run(["_nba_season.py", "ingest", (today - datetime.timedelta(days=2)).isoformat(), (today - datetime.timedelta(days=1)).isoformat()])
+    run(["_cbb_season.py", "ingest", (today - datetime.timedelta(days=2)).isoformat(), (today - datetime.timedelta(days=1)).isoformat()])   # 11/5 CBB
     run(["_nba_pbp.py", "build"])
     run(["_nba_lineups.py", "build"])
