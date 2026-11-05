@@ -6,6 +6,8 @@ His exact process, reproduced in order, no editorializing:
   STEP 2  h2h vs this opponent (all seasons -- he's played enough history to count) agrees with the L5/L10 direction.
   STEP 3  defense vs HIS shooting zone matches the direction: trend is UNDER and the defense is tough in his zones (zone_boost
           negative) -> confirms. Trend is OVER and defense is soft in his zones (zone_boost positive) -> confirms. Mismatch -> drop.
+  CONTEXT (11/5, printed, not gates): opponent allows X of this stat/game + rank; his avg with vs WITHOUT each out teammate;
+          how OTHER players at his position (G/F/C) did vs their own PP standard line for this stat against this opponent.
   STEP 4  (printed, not auto-graded) lineups/minutes/injuries/opponent's likely defender -- his manual override layer.
 
     python _pf_method.py [YYYY-MM-DD]
@@ -22,7 +24,12 @@ ZONE_CLS = {"dunk": "rim", "lob dunk": "rim", "putback": "rim", "rim": "rim", "l
 STAT = {"Points": "pts", "Rebounds": "reb", "Assists": "ast", "Pts+Rebs+Asts": "pts+reb+ast", "Pts+Rebs": "pts+reb",
         "Pts+Asts": "pts+ast", "Rebs+Asts": "reb+ast", "3-PT Made": "tpm", "3-PT Attempted": "tpa", "FG Attempted": "fga",
         "FG Made": "fgm", "Two Pointers Attempted": "fga-tpa", "Fantasy Score": "pts+1.2*reb+1.5*ast+3*stl+3*blk-tov",
-        "Blocked Shots": "blk", "Steals": "stl", "Blks+Stls": "stl+blk"}
+        "Blocked Shots": "blk", "Steals": "stl", "Blks+Stls": "stl+blk",
+        # 11/5 user: "keep going for pp stuff" -- every other standard PP stat our box score can grade
+        "Turnovers": "tov", "Free Throws Made": "ftm", "Free Throws Attempted": "fta", "Two Pointers Made": "fgm-tpm",
+        "Offensive Rebounds": "oreb", "Defensive Rebounds": "dreb", "Personal Fouls": "pf"}
+NON_SHOT |= {"Turnovers", "Offensive Rebounds", "Defensive Rebounds", "Personal Fouls"}
+LINES_DB = __import__("os").environ.get("LINES_DB", "lines.db")   # archived PP lines (the cloud's copy is the current one)
 
 
 def board(day):
@@ -123,6 +130,65 @@ def with_without(c, player, team, expr, teammate, line):
     return (sum(w) / len(w), len(w), sum(wo) / len(wo), len(wo), sum(v > line for v in wo))
 
 
+import os, json, unicodedata, re
+_norm = lambda s: re.sub(r"[^a-z]", "", unicodedata.normalize("NFKD", s or "").encode("ascii", "ignore").decode().lower())
+POS_F = "nba_positions.json"
+POS_GROUP = {"PG": "G", "SG": "G", "G": "G", "SF": "F", "PF": "F", "F": "F", "C": "C"}
+
+
+def positions():
+    """player (normalized name) -> G / F / C, from ESPN team rosters, cached 3 days."""
+    if os.path.exists(POS_F) and (datetime.datetime.now().timestamp() - os.path.getmtime(POS_F)) < 3 * 86400:
+        return json.load(open(POS_F, encoding="utf-8"))
+    import requests
+    H = {"User-Agent": "Mozilla/5.0"}; out = {}
+    teams = requests.get("https://site.api.espn.com/apis/site/v2/sports/basketball/nba/teams", headers=H, timeout=20).json()
+    for t in teams["sports"][0]["leagues"][0]["teams"]:
+        try:
+            r = requests.get("https://site.api.espn.com/apis/site/v2/sports/basketball/nba/teams/%s/roster" % t["team"]["id"], headers=H, timeout=20).json()
+        except Exception:
+            continue
+        for a in r.get("athletes", []):
+            g = POS_GROUP.get((a.get("position") or {}).get("abbreviation"))
+            if g:
+                out[_norm(a.get("displayName"))] = g
+    json.dump(out, open(POS_F, "w", encoding="utf-8"))
+    return out
+
+
+_PVL = {}
+
+
+def pos_vs_line(c, opp, stat, pos, me, before):
+    """11/5 user (PickFinder feature): how every OTHER player at his position did vs his PP STANDARD line for this stat when
+    facing `opp` this season. Closing line per player-game from the archive, graded off our box score. Not a gate."""
+    if not os.path.exists(LINES_DB) or stat not in STAT:
+        return None
+    key = (stat,)
+    if key not in _PVL:
+        L = sqlite3.connect(LINES_DB)
+        close = {}
+        for pl, st, line, start, seen in L.execute(
+                "select player, stat, line, start, last_seen from pp where league=7 and kind='standard' and stat=? and start>='2026-10-20'", (stat,)):
+            d = datetime.datetime.fromisoformat(start).astimezone(CT).date().isoformat()
+            k = (_norm(pl), d)
+            if k not in close or (seen or "") > close[k][1]:
+                close[k] = (line, seen or "")
+        box = {}
+        for d, pl, o, v in c.execute("select b.date, b.player, b.opp, %s from nba_box b join nba_games g on g.game_id=b.game_id where "
+                                     "g.season='2026-27' and g.stype='regular' and (b.dnp=0 or b.dnp is null) and b.min>0" % STAT[stat]):
+            box[(_norm(pl), d)] = (o, v, pl)
+        rows = []
+        for k, (line, _) in close.items():
+            if k in box and box[k][1] is not None and box[k][1] != line:
+                o, v, pl = box[k]
+                rows.append(dict(opp=o, player=pl, n=k[0], date=k[1], line=line, v=v, over=v > line))
+        _PVL[key] = rows
+    P = positions()
+    X = [r for r in _PVL[key] if r["opp"] == opp and r["date"] < before and r["n"] != _norm(me) and P.get(r["n"]) == pos]
+    return X
+
+
 def run(day):
     c = sqlite3.connect("sports.db")
     F.load_outs(c)
@@ -210,6 +276,16 @@ def run(day):
             against = (tough and g["side"] == "over") or (soft and g["side"] == "under")
             print("   %s allows %.1f %s/game to opponents, #%d of %d (1 = allows the most)%s" % (
                 g["opp"], oa[0], g["stat"].lower(), oa[1], oa[2], "  -> AGREES" if agree else "  -> AGAINST" if against else ""))
+        pos = positions().get(_norm(g["player"]))
+        X = pos_vs_line(c, g["opp"], g["stat"], pos, g["player"], day) if pos else None
+        if X:
+            ov = sum(r["over"] for r in X)
+            lean = ov / len(X)
+            tag = ("  -> AGREES" if (lean >= 0.6 and g["side"] == "over") or (lean <= 0.4 and g["side"] == "under") else
+                   "  -> AGAINST" if (lean >= 0.6 and g["side"] == "under") or (lean <= 0.4 and g["side"] == "over") else "")
+            ex = ", ".join("%s %s v %s" % ([w for w in r["player"].split() if w.rstrip(".") not in ("Jr", "Sr", "II", "III", "IV")][-1], ("%g" % r["v"]), r["line"]) for r in sorted(X, key=lambda r: r["date"])[-4:])
+            print("   other %ss vs %s on PP %s lines: %d over / %d under%s   (%s)" % (
+                {"G": "guard", "F": "forward", "C": "center"}[pos], g["opp"], g["stat"].lower(), ov, len(X) - ov, tag, ex))
         for tm in g["teammates_out"] or []:
             ww = with_without(c, g["player"], g["team"], e, tm, g["line"])
             if ww:
