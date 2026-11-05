@@ -16,6 +16,7 @@ import sqlite3
 
 CT = __import__("zoneinfo").ZoneInfo("America/Chicago")
 ESPN = {"NYK": "NY", "GSW": "GS", "SAS": "SA", "NOP": "NO", "UTA": "UTAH", "WAS": "WSH"}   # 10/30: PP's team code vs our box's (Maxey h2h vs NYK came back empty -- it's really "NY")
+NON_SHOT = {"Rebounds", "Assists", "Rebs+Asts", "Blocked Shots", "Steals", "Blks+Stls"}
 ZONE_CLS = {"dunk": "rim", "lob dunk": "rim", "putback": "rim", "rim": "rim", "lob layup": "rim", "hook": "paint",
             "floater": "paint", "mid": "mid", "three": "three"}
 STAT = {"Points": "pts", "Rebounds": "reb", "Assists": "ast", "Pts+Rebs+Asts": "pts+reb+ast", "Pts+Rebs": "pts+reb",
@@ -129,7 +130,9 @@ def run(day):
         if h2h_rate < 0.5:
             continue
         # STEP 3: zone defense agrees with direction
-        zb = F.zone_boost(g["player"], g["opp"])
+        # 11/5: shooting zones say nothing about rebounds/assists/steals/blocks -- Wendell Carter O8.5 REB vs PHX (#30 D, #28 oreb
+        # allowed) was dropped for a neutral zone score. Non-shooting props skip the zone gate (shown as "zone: n/a").
+        zb = None if g["stat"] in NON_SHOT else F.zone_boost(g["player"], g["opp"])
         if zb is None:
             zone_ok = None  # no data, don't block, just flag unknown
         elif side == "over":
