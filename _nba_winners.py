@@ -1,9 +1,12 @@
 """NBA WINNERS (11/2-11/3, user: "idc about price, just stats and tell me who is gonna win").
-Team model: rating = (n*this-season net + 5*last-season net)/(n+5) + 2 home - 0.6*ppg of players OUT who played for the team
+Team model: rating = (n*this-season net + 5*last-season net)/(n+5) + 2 home - 0.2*ppg of players OUT who played for the team
 this season. Each day the 3 biggest predicted margins among teams PLAYING. Walk-forward 10/20-11/2: top-3 30-11.
 DROP RULE (11/3, keeps a pick only if it improves the record -- user rule): drop a pick when OUR top 2 scorers both average
 below their season ppg against this opponent (2+ meetings each). Flagged picks 8-12 vs 62-25 unflagged, permutation p=0.011;
-top-3 30-11 -> 32-8. Team h2h, rest, back-to-back, form, road and a cap on the injury term were all tested and REVERTED.
+top-3 30-11 -> 32-8.
+INJURY TERM 0.6 -> 0.2 (11/5): the 3 live top-3 losses (CLE 11/2, MEM + HOU 11/4) were all picks driven by the OPPONENT's
+outs. Walk-forward thru 11/4 (no drop rule): top-3 31-13 at 0.6 vs 34-10 at 0.2 (0.0-0.3 all 34-10), all games 78-43 vs 81-40.
+44 picks, not significant -- kept under the user rule (keep a change only if it improves the record). Team h2h, rest, back-to-back, form, road and a cap on the injury term were all tested and REVERTED.
 Bet type (DK closing lines backtest): ML when the pick is a 7.5+ favorite (win, don't cover), spread when -1.5 to -6.5.
 
     python _nba_winners.py [YYYY-MM-DD]     # -> data/nba_winners_<date>.json + printed board
@@ -14,7 +17,7 @@ import _sides as S
 DAY = sys.argv[1] if len(sys.argv) > 1 else datetime.datetime.now(__import__("zoneinfo").ZoneInfo("America/Chicago")).date().isoformat()
 OUTF = 'data/nba_winners_%s.json' % DAY
 c = sqlite3.connect('sports.db'); H = {'User-Agent': 'Mozilla/5.0'}
-K = 5; HOME = 2.0; INJ = 0.6
+K = 5; HOME = 2.0; INJ = 0.2   # 11/5: was 0.6 -- see docstring
 NAMES = {'ATL': 'hawks', 'BOS': 'celtics', 'BKN': 'nets', 'CHA': 'hornets', 'CHI': 'bulls', 'CLE': 'cavaliers', 'DAL': 'mavericks',
          'DEN': 'nuggets', 'DET': 'pistons', 'GS': 'warriors', 'HOU': 'rockets', 'IND': 'pacers', 'LAC': 'clippers', 'LAL': 'lakers',
          'MEM': 'grizzlies', 'MIA': 'heat', 'MIL': 'bucks', 'MIN': 'timberwolv', 'NO': 'pelicans', 'NY': 'knicks', 'OKC': 'thunder',
