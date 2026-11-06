@@ -22,7 +22,7 @@ H = {"User-Agent": "Mozilla/5.0", "Accept": "application/json"}
 CT = __import__("zoneinfo").ZoneInfo("America/Chicago")
 LOG = "xcheck_log.jsonl"
 norm = M.norm
-PP_LEAGUE = {"NBA": 7, "NFL": 9, "NHL": 8, "CFB": 15}
+PP_LEAGUE = {"NBA": 7, "NFL": 9, "NHL": 8, "CFB": 15, "CBB": 20}   # 11/6: + CBB (sources: Underdog + Sleeper only)
 COMBO_SD = {"pts & rebs", "pts & asts", "rebs & asts"}                 # spread like points (sd_for has no combo rows)
 
 # every source's stat name -> one vocabulary (Pinnacle's)
