@@ -31,7 +31,11 @@ def schema(c):
 def summary(gid):
     f = os.path.join(RAW, "%s.json.gz" % gid)
     if os.path.exists(f):
-        return json.load(gzip.open(f, "rt", encoding="utf-8"))
+        try:
+            with gzip.open(f, "rt", encoding="utf-8") as fh:
+                return json.load(fh)
+        except Exception:                               # 11/6: half-written file from a killed run -> refetch
+            os.remove(f)
     s = N.get("%s/summary?event=%s" % (BASE, gid))
     if s and s.get("boxscore", {}).get("players"):
         json.dump(s, gzip.open(f, "wt", encoding="utf-8"))

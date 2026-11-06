@@ -148,7 +148,7 @@ def card(day, sports):
     for sp in sports:
         q += screen(day, sp)
         print()
-    q.sort(key=lambda r: (-r["pu"], r["z"]))
+    q.sort(key=lambda r: (r["sport"] == "cbb" or r["early"], -r["pu"], r["z"]))   # 11/6: measured NBA legs first; CBB/early = probation, fill only
     used, pick = set(), []
     for r in q:
         if nn(r["player"]) in used or r["transfer"]:
