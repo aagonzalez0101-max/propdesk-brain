@@ -165,11 +165,75 @@ def card(day, sports):
             print("  Slip %d: %s" % (i // 2 + 1, "  +  ".join("[%s] %s U%g %s" % (r["sport"].upper(), r["player"], r["line"], r["stat"]) for r in sl)))
 
 
+def grade(days, sp, lines_db=None):
+    """11/6 user: "move the nba stat process into cbb right away so we know". Every archived CLOSING PP standard line on each day ->
+    the 7 checks AS-OF that day -> graded vs the box. Appends to stack_grades.jsonl (one row per line, re-runs dedupe) and prints the
+    record by stack. Needs a CURRENT lines.db (laptop copy is stale: extract the cloud bundle's and pass LINES_DB=<path>)."""
+    lines_db = lines_db or os.environ.get("LINES_DB", "lines.db")
+    L = sqlite3.connect(lines_db, timeout=30); c = sqlite3.connect("sports.db", timeout=60); cf = CFG[sp]
+    done = set()
+    if os.path.exists("stack_grades.jsonl"):
+        for l in open("stack_grades.jsonl", encoding="utf-8"):
+            r = json.loads(l); done.add((r["sport"], r["date"], nn(r["player"]), r["stat"]))
+    new = []
+    for day in days:
+        close = {}
+        for pl, team, st, line, start, seen in L.execute("select player, team, stat, line, start, last_seen from pp where league=? and kind='standard'", (cf["league"],)):
+            if st not in STATS or not pl or datetime.datetime.fromisoformat(start).astimezone(CT).date().isoformat() != day:
+                continue
+            k = (nn(pl), st)
+            if k not in close or (seen or "") > close[k][1]:
+                close[k] = (line, seen or "", pl, team, start)
+        box = {}
+        for row in c.execute("select b.player, b.team, b.opp, " + ",".join("b." + k for k in COLS) + " from %s b where b.date=? and b.min>0" % cf["box"], (day,)):
+            box[nn(row[0])] = (row[1], row[2], dict(zip(COLS, [x or 0 for x in row[3:]])))
+        D = Data(day, sp)
+        global first_line
+        _fl = first_line
+        first_line = lambda player, stat, d, league: (lambda r: r[0] if r else None)(L.execute(
+            "select line from pp where league=? and kind='standard' and player=? and stat=? and substr(start,1,10)=? order by first_seen limit 1",
+            (league, player, stat, d)).fetchone())
+        for (k, st), (line, _, pl, team, start) in close.items():
+            if k not in box or (sp, day, k, st) in done:
+                continue
+            tm, opp, s = box[k]; act = val(s, STATS[st])
+            if act == line:
+                continue
+            r = check(D, dict(sport=sp, player=pl, team=cf["team"].get(team, team), opp=opp, stat=st, line=line, start=start), day)
+            if not r:
+                continue
+            new.append(dict(sport=sp, date=day, player=pl, stat=st, line=line, act=act, over=int(act > line), po=r["po"], pu=r["pu"],
+                            v=r["v"], z=round(r["z"], 3), early=r["early"], transfer=r["transfer"], n_cur=r["n_cur"]))
+        first_line = _fl
+    with open("stack_grades.jsonl", "a", encoding="utf-8") as f:
+        for r in new:
+            f.write(json.dumps(r) + "\n")
+    allr = [json.loads(l) for l in open("stack_grades.jsonl", encoding="utf-8")]
+    allr = [r for r in allr if r["sport"] == sp]
+    print("%s graded lines: %d new, %d total (%s)" % (sp.upper(), len(new), len(allr), ", ".join(sorted(set(r["date"] for r in allr)))))
+    def rep(lab, X):
+        if X:
+            w = sum(X); n = len(X); print("  %-38s %4d-%-4d %5.1f%%" % (lab, w, n - w, 100 * w / n))
+        else:
+            print("  %-38s   --" % lab)
+    rep("ALL UNDERS (base)", [1 - r["over"] for r in allr])
+    for k_ in (3, 4, 5):
+        rep("UNDER %d+ agree, 0 against" % k_, [1 - r["over"] for r in allr if r["pu"] >= k_ and r["po"] == 0])
+        rep("OVER  %d+ agree, 0 against" % k_, [r["over"] for r in allr if r["po"] >= k_ and r["pu"] == 0])
+    rep("UNDER 4+ & NOT early (3+ games this yr)", [1 - r["over"] for r in allr if r["pu"] >= 4 and r["po"] == 0 and not r["early"]])
+    print("  each check alone:")
+    for ck in ("proj", "season", "L5", "L10", "h2h", "opp", "move"):
+        rep("    %-7s says UNDER" % ck, [1 - r["over"] for r in allr if r["v"][ck] == -1])
+        rep("    %-7s says OVER" % ck, [r["over"] for r in allr if r["v"][ck] == 1])
+
+
 if __name__ == "__main__":
     a = sys.argv[1:]
     day = next((x for x in a if re.match(r"\d{4}-\d\d-\d\d", x)), datetime.datetime.now(CT).date().isoformat())
     sp = next((x for x in a if x in ("cbb", "nba", "all")), "cbb")
-    if a[:1] == ["card"]:
+    if a[:1] == ["grade"]:                    # python _stack.py grade cbb 2026-11-05 [2026-11-06 ...]   (LINES_DB=<current lines.db>)
+        grade([x for x in a if re.match(r"\d{4}-\d\d-\d\d", x)] or [day], sp)
+    elif a[:1] == ["card"]:
         card(day, ["nba", "cbb"] if sp == "all" else [sp])
     else:
         screen(day, sp)
