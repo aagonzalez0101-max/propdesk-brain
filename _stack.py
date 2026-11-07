@@ -27,11 +27,32 @@ STATS = {"Points": "pts", "Rebounds": "reb", "Assists": "ast", "Pts+Rebs+Asts": 
          "FG Made": "fgm", "FG Attempted": "fga", "Free Throws Made": "ftm", "Offensive Rebounds": "oreb", "Defensive Rebounds": "dreb",
          "Fantasy Score": "pts+1.2*reb+1.5*ast+3*blk+3*stl-tov"}
 COLS = ["pts", "reb", "ast", "tpm", "blk", "stl", "tov", "fgm", "fga", "ftm", "oreb", "dreb"]
+NHL_STATS = {"Shots On Goal": "sog", "Points": "points", "Assists": "assists", "Goals": "goals", "Hits": "hits", "Blocked Shots": "blocks"}
+NHL_COLS = ["sog", "points", "assists", "goals", "hits", "blocks"]
+stats_for = lambda sp: NHL_STATS if sp == "nhl" else STATS
 CUR = "2026-27"
+# 11/6 user: "why cant we ever just mix always" -> every measured rule, BOTH sides, one table. (side, stats or None=all, min agree, label, tier)
+# tier 0 = measured on real closing PP lines 10/1-11/4 (stack_bt.py), 1 = small-n measured, 2 = probation (not measured in this sport)
+RULES = {"nba": [("under", None, 4, "NBA under 4+ 58.8% n=250", 0)],
+         "nhl": [("under", None, 4, "NHL under 4+ 62.3% n=77 (SOG U 69.6% n=46)", 0),
+                 ("over", {"Points"}, 4, "NHL POINTS OVER 4+ 63.6% n=33", 1)],
+         "cbb": [("under", None, 4, "CBB PROBATION (stack 4-16 on 11/5 -- early season, last-season data)", 2)]}
 CFG = {"cbb": dict(league=20, box="cbb_box", games="cbb_games", where="", team={}),
+       "nhl": dict(league=8, box=None, games=None, where="", team={}),
        "nba": dict(league=7, box="nba_box", games="nba_games", where=" and g.stype='regular'",
                    team={"NYK": "NY", "GSW": "GS", "SAS": "SA", "NOP": "NO", "UTA": "UTAH", "WAS": "WSH"})}
 val = lambda row, e: eval(e, {}, row)
+
+
+def pkey(sp, name):
+    """NHL rows store "S. Colangelo"; PP sends "Sam Colangelo" -> first initial + last name. Other sports: full name."""
+    if sp != "nhl" or not name:
+        return nn(name)
+    if ". " in name:
+        a, b = name.split(". ", 1)
+    else:
+        w = name.split(); a, b = w[0], " ".join(w[1:])
+    return a[:1].lower() + nn(b)
 
 
 def board(day, sp):
@@ -41,7 +62,7 @@ def board(day, sp):
     out = []
     for x in d["data"]:
         a = x["attributes"]
-        if a.get("odds_type") != "standard" or a.get("is_promo") or a["stat_type"] not in STATS:
+        if a.get("odds_type") != "standard" or a.get("is_promo") or a["stat_type"] not in stats_for(sp):
             continue
         if datetime.datetime.fromisoformat(a["start_time"]).astimezone(CT).date().isoformat() != day:
             continue
@@ -63,10 +84,24 @@ def first_line(player, stat, day, league):
 
 class Data:
     def __init__(self, before, sp):
-        cf = CFG[sp]
+        cf = CFG[sp]; self.sp = sp
         c = sqlite3.connect("sports.db", timeout=60)
         self.G = collections.defaultdict(list)
         tot = collections.defaultdict(lambda: collections.defaultdict(float))
+        if sp == "nhl":
+            for gid, d, tm, opp, pl, mn, st in c.execute("select game_id,date,team,opp,player,minutes,stats from player_games where sport='NHL' and date>='2025-10-01' and date<? order by date", (before,)):
+                j = json.loads(st)
+                if j.get("gtype") != "reg" or not mn:
+                    continue
+                season = CUR if d >= "2026-09-01" else "2025-26"
+                s = {k: float(j.get(k) or 0) for k in NHL_COLS}
+                self.G[pkey(sp, pl)].append(dict(date=d, team=tm, opp=opp, min=mn, season=season, s=s))
+                for k, v in s.items():
+                    tot[(gid, opp, season)][k] += v
+            self.OPP = collections.defaultdict(list)
+            for (gid, opp, season), t in tot.items():
+                self.OPP[(opp, season)].append(t)
+            return
         for r in c.execute("select b.game_id,b.date,b.team,b.opp,b.player,b.min,g.season," + ",".join("b." + k for k in COLS) +
                            " from %s b join %s g on g.game_id=b.game_id where (b.dnp is null or b.dnp='' or b.dnp='0') and b.min>0 and b.date<?%s order by b.date" % (cf["box"], cf["games"], cf["where"]), (before,)):
             gid, d, tm, opp, pl, mn, season = r[:7]; s = dict(zip(COLS, [x or 0 for x in r[7:]]))
@@ -88,11 +123,12 @@ class Data:
 
 
 def check(D, leg, day):
-    games = D.G.get(nn(leg["player"]))
+    games = D.G.get(pkey(leg["sport"], leg["player"]))
     if not games:
         return None
-    e = STATS[leg["stat"]]; ln = leg["line"]
-    cur = [g for g in games if g["season"] == CUR]; prev = [g for g in games if g["season"] == "2025-26" and g["min"] >= 10]
+    e = stats_for(leg["sport"])[leg["stat"]]; ln = leg["line"]
+    mmin = 8 if leg["sport"] == "nhl" else 10
+    cur = [g for g in games if g["season"] == CUR]; prev = [g for g in games if g["season"] == "2025-26" and g["min"] >= mmin]
     early = len(cur) < 3
     base_g = cur if not early else (prev + cur)
     if len(base_g) < 3:
@@ -118,9 +154,30 @@ def check(D, leg, day):
     fl = first_line(leg["player"], leg["stat"], leg["start"][:10], CFG[leg["sport"]]["league"])
     v["move"] = 0 if fl is None or fl == ln else (1 if ln > fl else -1)
     po = list(v.values()).count(1); pu = list(v.values()).count(-1)
+    # 11/7: RISING MINUTES (Burries 16->26 min, then 38 min / 27 P+A on 11/6): last 2 games 20%+ and 4+ min above his season average
+    rising = False
+    if len(cur) >= 4:
+        smin = statistics.mean(g["min"] for g in cur[:-2]); l2 = statistics.mean(g["min"] for g in cur[-2:])
+        rising = l2 >= 1.2 * smin and l2 - smin >= 4
     transfer = bool(prev and cur and prev[-1]["team"] != cur[-1]["team"]) or bool(prev and not cur and leg["team"] and prev[-1]["team"] != leg["team"])
-    return dict(leg, mu=mu, z=z, v=v, po=po, pu=pu, n_cur=len(cur), early=early, transfer=transfer,
+    return dict(leg, mu=mu, z=z, v=v, po=po, pu=pu, n_cur=len(cur), early=early, transfer=transfer, rising=rising,
                 l5=seq[-5:], mins=exp_min, of=of)
+
+
+def nba_totals(day):
+    """11/7: pregame game total per team (ESPN scoreboard odds). NBA under 4+: total <=222.5 63.3% vs >=226.5 54.2% (n=250) -> FLAG."""
+    try:
+        import urllib.request
+        d = json.load(urllib.request.urlopen(urllib.request.Request(
+            "https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard?dates=" + day.replace("-", ""), headers={"User-Agent": "Mozilla/5.0"}), timeout=30))
+        out = {}
+        for e in d.get("events", []):
+            c = e["competitions"][0]; o = (c.get("odds") or [{}])[0]
+            for t in c["competitors"]:
+                out[t["team"]["abbreviation"]] = o.get("overUnder")
+        return out
+    except Exception:
+        return {}
 
 
 def screen(day, sp):
@@ -128,41 +185,73 @@ def screen(day, sp):
     D = Data(day, sp)
     rows = [r for r in (check(D, l, day) for l in legs) if r]
     print("%s %s: %d PP standard lines, %d with logs" % (sp.upper(), day, len(legs), len(rows)))
-    q = [r for r in rows if r["pu"] >= 4 and r["po"] == 0]
-    q.sort(key=lambda r: (-r["pu"], r["z"]))
-    print("\nQUALIFIERS -- UNDER, 4+ checks agree, 0 against  (%s)" % ("NBA 58.8% n=250" if sp == "nba" else "PROBATION: measured in NBA/NHL/NFL, not yet in CBB"))
-    for r in q:
-        print("  %-22s %-5s vs %-5s U%-5g %-14s proj %5.1f | %d agree [%s] | L5 %s | min %.0f%s%s" % (
-            r["player"][:22], r["team"], r["opp"], r["line"], r["stat"], r["mu"], r["pu"], ",".join(k for k, x in r["v"].items() if x == -1),
-            "/".join("%g" % x for x in r["l5"]), r["mins"], " EARLY(%d gm)" % r["n_cur"] if r["early"] else "", " TRANSFER" if r["transfer"] else ""))
-    fade = [r for r in rows if r["po"] >= 4 and r["pu"] == 0]
+    TOT = nba_totals(day) if sp == "nba" else {}
+    for r in rows:
+        r["total"] = TOT.get(r["team"])
+    q = []
+    for side, stats, k, label, tier in RULES[sp]:
+        hit = [dict(r, side=side, k=r["pu"] if side == "under" else r["po"], rule=label, tier=tier + (1 if r["early"] and tier < 2 else 0))
+               for r in rows if (stats is None or r["stat"] in stats) and
+               ((side == "under" and r["pu"] >= k and r["po"] == 0) or (side == "over" and r["po"] >= k and r["pu"] == 0))]
+        hit.sort(key=lambda r: (-r["k"], r["z"] if side == "under" else -r["z"]))
+        print("\n%s -- %s %d+ checks agree, 0 against  [%s]" % ("QUALIFIERS" if tier < 2 else "PROBATION", side.upper(), k, label))
+        for r in hit:
+            print("  %-22s %-5s vs %-5s %s%-5g %-14s proj %5.1f | %d agree [%s] | L5 %s | min %.0f%s%s" % (
+                r["player"][:22], r["team"], r["opp"], side[0].upper(), r["line"], r["stat"], r["mu"], r["k"],
+                ",".join(c_ for c_, x in r["v"].items() if x == (-1 if side == "under" else 1)),
+                "/".join("%g" % x for x in r["l5"]), r["mins"], " EARLY(%d gm)" % r["n_cur"] if r["early"] else "", " TRANSFER" if r["transfer"] else "")
+                + (" | total %g%s" % (r["total"], " HIGH" if r["total"] >= 226.5 else " low" if r["total"] <= 222.5 else "") if r.get("total") else "")
+                + (" | RISING MIN -> bench" if r["rising"] else ""))
+        if not hit:
+            print("  none")
+        q += hit
+    ruled = {(r["player"], r["stat"]) for r in q}
+    fade = [r for r in rows if r["po"] >= 4 and r["pu"] == 0 and (r["player"], r["stat"]) not in ruled]
     if fade:
-        print("\nALL-CHECKS-SAY-OVER (overs lose at every stack in every sport -- skip; NHL/NFL these were fades):")
+        print("\nALL-CHECKS-SAY-OVER with no measured over rule (overs 41-49 pct at every stack) -- skip%s:" % (
+            "; NHL SOG overs 4+ went 14-27 = FADE" if sp == "nhl" else ""))
         for r in sorted(fade, key=lambda r: -r["po"])[:8]:
             print("  %-22s O%-5g %-14s proj %5.1f | %d agree" % (r["player"][:22], r["line"], r["stat"], r["mu"], r["po"]))
     return q
 
 
-def card(day, sports):
+def card(day, sports, n_slips=2):
+    """11/6 MIXED card: every sport's measured rules, both sides, ranked by tier then agreement. At most 2 legs per sport unless no
+    other sport has a qualifier; one leg per player; a slip never pairs two legs from the same game."""
     q = []
     for sp in sports:
-        q += screen(day, sp)
+        try:
+            q += screen(day, sp)
+        except Exception as e:
+            print("%s screen failed: %s" % (sp.upper(), e))
         print()
-    q.sort(key=lambda r: (r["sport"] == "cbb" or r["early"], -r["pu"], r["z"]))   # 11/6: measured NBA legs first; CBB/early = probation, fill only
-    used, pick = set(), []
-    for r in q:
-        if nn(r["player"]) in used or r["transfer"]:
-            continue
-        used.add(nn(r["player"])); pick.append(r)
-        if len(pick) == 4:
-            break
-    print("\nCARD (top 4, one per player, no transfers):")
+    bench = [r for r in q if r["rising"]]
+    if bench:
+        print("BENCHED (rising minutes): " + ", ".join("%s %s%g %s" % (r["player"], r["side"][0].upper(), r["line"], r["stat"]) for r in bench))
+    q = [r for r in q if not r["transfer"] and not r["rising"]]
+    q.sort(key=lambda r: (r["tier"], -r["k"], -abs(r["z"])))
+    need = 2 * n_slips
+    used, per, pick = set(), collections.Counter(), []
+    for cap in (2, need):
+        for r in q:
+            if len(pick) == need:
+                break
+            if pkey(r["sport"], r["player"]) in used or per[r["sport"]] >= cap:
+                continue
+            used.add(pkey(r["sport"], r["player"])); per[r["sport"]] += 1; pick.append(r)
+    slips, rest = [], pick[:]
+    while len(rest) >= 2:
+        a = rest.pop(0)
+        b = next((x for x in rest if {x["team"], x["opp"]} != {a["team"], a["opp"]}), rest[0])
+        rest.remove(b); slips.append((a, b))
+    fmt = lambda r: "[%s] %s %s%g %s (tier %d%s)" % (r["sport"].upper(), r["player"], r["side"][0].upper(), r["line"], r["stat"], r["tier"],
+                                                   ", total %g" % r["total"] if r.get("total") else "")
+    print("\nMIXED CARD (tier 0 = measured, 1 = small-n / early, 2 = probation; max 2 legs per sport when others qualify):")
     if pick:
-        print("  POTD: [%s] %s U%g %s" % (pick[0]["sport"].upper(), pick[0]["player"], pick[0]["line"], pick[0]["stat"]))
-    for i in (0, 2):
-        sl = pick[i:i + 2]
-        if len(sl) == 2:
-            print("  Slip %d: %s" % (i // 2 + 1, "  +  ".join("[%s] %s U%g %s" % (r["sport"].upper(), r["player"], r["line"], r["stat"]) for r in sl)))
+        print("  POTD: " + fmt(pick[0]))
+    for i, (a, b) in enumerate(slips):
+        print("  Slip %d: %s  +  %s" % (i + 1, fmt(a), fmt(b)))
+    return pick
 
 
 def grade(days, sp, lines_db=None):
@@ -230,10 +319,10 @@ def grade(days, sp, lines_db=None):
 if __name__ == "__main__":
     a = sys.argv[1:]
     day = next((x for x in a if re.match(r"\d{4}-\d\d-\d\d", x)), datetime.datetime.now(CT).date().isoformat())
-    sp = next((x for x in a if x in ("cbb", "nba", "all")), "cbb")
+    sp = next((x for x in a if x in ("cbb", "nba", "nhl", "all")), "cbb")
     if a[:1] == ["grade"]:                    # python _stack.py grade cbb 2026-11-05 [2026-11-06 ...]   (LINES_DB=<current lines.db>)
         grade([x for x in a if re.match(r"\d{4}-\d\d-\d\d", x)] or [day], sp)
     elif a[:1] == ["card"]:
-        card(day, ["nba", "cbb"] if sp == "all" else [sp])
+        card(day, ["nba", "nhl", "cbb"] if sp == "all" else [sp])
     else:
         screen(day, sp)
