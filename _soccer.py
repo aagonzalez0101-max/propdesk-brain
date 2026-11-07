@@ -450,6 +450,12 @@ def screen(day):
         print("%-6s %-22s %-14s %-18s %-5s %5s %4.0f%% %3d/%-3d %6s %-18s %-5s %s" % (
             r["verdict"], r["player"][:22], (r["team"] or "")[:14], r["stat"][:18], r["side"], r["line"], 100 * r["p"],
             r["hits"], r["n"], r["avg"], str(r["last5"])[:18], r["h2h"], ", ".join(r["flags"])))
+        # 11/7 user (PickFinder-style context, print-only): the opponent's allowed rate for this stat vs today's average team,
+        # tagged against our side. Measured 11/5 (ctx_bt soccer): opp-rank AGREE 34-15 (69%) vs AGAINST 61-60 -- context, not a gate.
+        if r.get("factor_why"):
+            f = r["factor"]
+            tag = "AGREES" if (f >= 1.03 and r["side"] == "over") or (f <= 0.97 and r["side"] == "under") else                   "AGAINST" if (f >= 1.03 and r["side"] == "under") or (f <= 0.97 and r["side"] == "over") else "neutral"
+            print("%-6s   opponent: %s (x%.2f) -> %s" % ("", r["factor_why"], f, tag))
     hit = [r for r in R if r["verdict"] == "HIT"]
     if hit:
         ov = sum(r["side"] == "over" for r in hit) / len(hit)

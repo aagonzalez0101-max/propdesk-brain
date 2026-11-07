@@ -95,11 +95,23 @@ def build_state():
 
 
 def nick_index():
+    """Duplicate nicks (xiELO = 6205 PARIVISION and 11653 old GUN5) -> the pid whose LATEST MAP is newest. 11/7: cs2_nicks.json 'last'
+    is frozen at the first backfill (xiELO's said 2024), so it picked the dead account and the real one fell into 'roster mismatch'."""
     N = json.load(open("cs2_nicks.json"))
+    seen = {}
+    for fn in ("cs2_maps.jsonl", "cs2_maps_old.jsonl"):
+        if os.path.exists(fn):
+            for l in open(fn, encoding="utf-8"):
+                i = l.find('"player": '); j = l.find('"date": "')
+                if i < 0 or j < 0:
+                    continue
+                pid = l[i + 10:l.find(",", i)].strip(); d = l[j + 9:j + 19]
+                if d > seen.get(pid, ""):
+                    seen[pid] = d
     idx = collections.defaultdict(list)
     for pid, v in N.items():
         if v.get("nick"):
-            idx[norm(v["nick"])].append((v.get("last") or "", int(pid), v))
+            idx[norm(v["nick"])].append((max(seen.get(pid, ""), v.get("last") or ""), int(pid), v))
     return {k: sorted(v, reverse=True)[0] for k, v in idx.items()}
 
 
@@ -345,7 +357,18 @@ def card(min_edge=0.03, max_hours=None):
     for r in rows:
         ratio = r["model_mu"] / r["line"] if r["line"] else 1
         r["suspect"] = "line %.0f%% off model mean: role change / news the model can't see" % (100 * (ratio - 1)) if (ratio < 0.8 or ratio > 1.25) else None
-    picks = [r for r in rows if min_edge <= r["edge"] < EDGE_CAP and not r["suspect"]]
+    # 11/7: map-win sanity -- if both teams in one match come out 60%+ to win a map, the opponent clan was mis-resolved (FURIA v BetBoom 11/6)
+    wp = collections.defaultdict(dict)
+    for r in rows:
+        wp[r["match_id"]][r["team"]] = r["map_winp"]
+    for r in rows:
+        v = list(wp[r["match_id"]].values())
+        if len(v) == 2 and sum(v) > 1.2 and not r["suspect"]:
+            r["suspect"] = "map-win %.0f%% + %.0f%%: opponent mis-resolved, match unpriced" % (100 * v[0], 100 * v[1])
+    # 11/7: the v3 UNDERDOG-UNDER rule (79-37) counts lowers at ANY edge >= 6% (12%+ went 67%), but the 3-9% cap kept the best ones out of
+    # cs2_paper.jsonl -> _cs2_card.build_dog never saw them (FORZE Lack1/Jame 11/5). Log them regardless of the cap.
+    dog = lambda r: r["side"] == "lower" and r["edge"] >= 0.06 and r["map_winp"] < 0.40 and r["maps"] == 2
+    picks = [r for r in rows if not r["suspect"] and (min_edge <= r["edge"] < EDGE_CAP or dog(r))]
     for r in rows[:40]:
         print("%+5.1f%% %-5s %-14s %-24s %5.1f %5s %5.1f%% %5.1f%% %6.1f %5.2f  %s %s%s" % (
             100 * r["edge"], r["side"][:5], r["player"][:14], r["stat"][:24], r["line"], r["pp_line"] if r["pp_line"] is not None else "-",

@@ -150,6 +150,8 @@ def grade(log, part="all"):
         ("Discord: projection vs actual for yesterday's legs", ["_projcheck.py", "--post"], 600),
         ("NBA season DB: ingest yesterday's games", ["_nba_season.py", "ingest", (datetime.datetime.now(CT).date() - datetime.timedelta(days=1)).isoformat()], 900),
         ("CBB season DB: ingest yesterday's games", ["_cbb_season.py", "ingest", (datetime.datetime.now(CT).date() - datetime.timedelta(days=1)).isoformat()], 900),
+        ("stacked-checks forward record: grade yesterday's CBB + NBA lines (11/7)", ["_stack.py", "grade", "cbb", (datetime.datetime.now(CT).date() - datetime.timedelta(days=1)).isoformat()], 900),
+        ("stacked-checks forward record: NBA", ["_stack.py", "grade", "nba", (datetime.datetime.now(CT).date() - datetime.timedelta(days=1)).isoformat()], 900),
         ("NBA play-by-play: parse new games into shot types / passers / events (10/23)", ["_nba_pbp.py", "build"], 900),
         ("NBA lineups: who was on the floor + small-ball stints (10/23)", ["_nba_lineups.py", "build"], 900),
         ("NBA paper: grade every logged line + rule report (10/22)", ["_nba_paper.py", "grade"], 600),
