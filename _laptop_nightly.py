@@ -21,6 +21,7 @@ def run(args, to=1800):
 if __name__ == "__main__":
     os.makedirs("daily_log", exist_ok=True)
     today = datetime.datetime.now(CT).date()
+    run(["_bundle.py", "lines"])          # 11/16: line-move rules + backtests need the cloud's lines.db (laptop copy goes stale)
     run(["_nba_season.py", "ingest", (today - datetime.timedelta(days=2)).isoformat(), (today - datetime.timedelta(days=1)).isoformat()])
     run(["_cbb_season.py", "ingest", (today - datetime.timedelta(days=2)).isoformat(), (today - datetime.timedelta(days=1)).isoformat()])   # 11/5 CBB
     run(["_nba_pbp.py", "build"])

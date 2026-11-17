@@ -6,6 +6,7 @@ so the laptop and the cloud run on the same ledgers/models/databases.
     python _bundle.py unpack in.tar.gz  # restore it over this folder
     python _bundle.py push              # laptop -> GitHub release 'data' (refuses if the cloud copy changed since your last pull)
     python _bundle.py pull              # GitHub release 'data' -> laptop
+    python _bundle.py lines             # 11/16: refresh ONLY lines.db from the cloud (do this before any backtest / line-move rule)
 
 IN:  every data file in this folder + small data folders + TODAY's raw PP/sharp snapshots (lines.db holds the history).
 OUT: code (git), secrets (.env, notify.json), logs, the old raw archive, legacy data/, backtest-only caches (_euro, _nbl), and the
@@ -272,6 +273,27 @@ def pull():
     print("pulled bundle (%s), ledger + paper files row-merged" % a["updated_at"])
 
 
+def lines_only():
+    """11/16: the CLOUD writes lines.db (hourly PP + sharp archive); the laptop copy goes stale between pulls (it sat at 10/31 for 16 days).
+    Download the bundle and replace ONLY lines.db -- nothing else on the laptop changes."""
+    import tarfile, shutil
+    a = remote_asset(release())
+    dp = "_lines_%d.tar.gz" % os.getpid()
+    download(a, dp)
+    try:
+        with tarfile.open(dp) as t:
+            m = [x for x in t.getmembers() if x.name.lstrip("./") == "lines.db"]
+            if not m:
+                raise SystemExit("no lines.db in the cloud bundle")
+            t.extractall("_lines_tmp", members=m)
+        shutil.move(os.path.join("_lines_tmp", m[0].name.lstrip("./")), "lines.db.new")
+        os.replace("lines.db.new", "lines.db")
+        print("lines.db refreshed from the cloud bundle (%s)" % a["updated_at"])
+    finally:
+        os.path.exists(dp) and os.remove(dp)
+        shutil.rmtree("_lines_tmp", ignore_errors=True)
+
+
 COLD = ("_fotmob", "_img_cache", "_site_cache")      # big refetchable caches: seeded once, then kept in the cloud's Actions cache
 
 
@@ -309,6 +331,8 @@ if __name__ == "__main__":
         unpack(sys.argv[2] if len(sys.argv) > 2 else ASSET)
     elif cmd == "push":
         push(force="--force" in sys.argv, cloud="--cloud" in sys.argv)
+    elif cmd == "lines":
+        lines_only()
     elif cmd == "pull":
         pull()
     elif cmd == "cold-push":

@@ -75,7 +75,7 @@ for pid, l in lines.items():
     natl = any(w in (m["league"] or "") for w in ("Nations League", "World Cup", "Qualif", "Friendl", "Euro "))
     rows.append(dict(l, actual=a, over=int(a > l["line"]), league=m["league"], national=natl, home=norm(l["team"]) in (norm(m["home"]), norm(m["hl"])),
                      date=utc.date().isoformat(), match_id=m["id"]))
-json.dump(rows, open("_soccer_pp_rows.json", "w"), ensure_ascii=False)
+json.dump(rows, open("_soccer_pp_rows.json", "w", encoding="utf-8"), ensure_ascii=False)
 print("graded: %d   dropped: %s" % (len(rows), dict(miss)))
 def rep(lab, X):
     if len(X) >= 20:

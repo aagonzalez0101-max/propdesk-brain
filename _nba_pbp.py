@@ -60,6 +60,9 @@ def shot_class(typ, text, pts_att):
 
 
 def parse(gid, s, c):
+    # 11/16: nba_events has no key and used a plain insert -> 601 games built twice had every rebound / FT counted double
+    # (pbp rebounds ran +2.1 per player-game vs the box). Clear this game's rows first so a rebuild can never duplicate.
+    c.execute("delete from nba_events where game_id=?", (gid,))
     comp = (s.get("header") or {}).get("competitions", [{}])[0]
     teams = {t["id"]: t["team"]["abbreviation"] for t in comp.get("competitors", [])}
     date = (comp.get("date") or "")[:10]
