@@ -41,7 +41,8 @@ def send(kind, text, priority="default"):
         except Exception as e:
             print("ntfy:", e)
     # 10/9: the CLOUD (propdesk-cloud) posts promos/moves/value; the laptop posts only the card + results to #card, as embed cards
-    if c.get("discord_webhook") and kind in c.get("discord_kinds", ["CARD", "RESULT", "TEST", "PULLED", "MOVE"]):
+    skip = set(filter(None, os.environ.get("DISCORD_SKIP", "").split(",")))     # 11/16: e.g. DISCORD_SKIP=MOVE keeps line moves out of Discord
+    if c.get("discord_webhook") and kind in c.get("discord_kinds", ["CARD", "RESULT", "TEST", "PULLED", "MOVE"]) and kind not in skip:
         try:
             col = {"CARD": 0x1DB954, "RESULT": 0x1ED760, "TEST": 0x7C7C7C, "PULLED": 0xF3727F, "MOVE": 0xFFA42B}.get(kind, 0x7C7C7C)
             requests.post(c["discord_webhook"], timeout=15, json={"username": "PropDesk", "embeds": [{

@@ -103,8 +103,10 @@ def main(minutes):
             if key not in done and now.minute >= 5 and (end - time.time()) > 1500:
                 print("%s CT -- hourly" % now.strftime("%H:%M"), flush=True)
                 code_sync()                                   # 10/17 user ("why does it do this? you should agree"): take my fixes within the hour
+                os.environ["DISCORD_SKIP"] = "MOVE"           # 11/16: hourly line MOVES go to the feed log, not Discord (PULLED still posts)
                 for c in HOURLY:
                     run(c, 1200)
+                os.environ.pop("DISCORD_SKIP", None)
                 done[key] = now.isoformat(timespec="minutes")
                 done = {k: v for k, v in done.items() if k[:10] >= (now.date() - datetime.timedelta(days=3)).isoformat()}
                 json.dump(done, open(DONE_F, "w")); sync(); did = True
@@ -114,11 +116,14 @@ def main(minutes):
             # 10/10 user: "push it". LINE-RELEASE SCANNER every 30 min: early PP lines are the best ones (Hall/Talbot got pulled or raised
             # within hours). Re-score picks + CS2 on the fresh board; post ONLY slips that are new (NEW_ONLY), so Discord stays quiet otherwise.
             print("%s CT -- release scan" % now.strftime("%H:%M"), flush=True)
+            # 11/16 user: "I get pinged every like 2-5 min is that necessary" -> the 15-min scans still score, log and grade, but post
+            # NOTHING to Discord (CARD_DRYRUN). Discord gets the 7:45 AM card, the 9 PM card, results and pulled legs only.
+            os.environ["CARD_DRYRUN"] = "1"
             for c in (["_dir_search.py", "score"], ["_cs2_live.py", "card"], ["_cs2_card.py"]):   # 11/4: + the CS2 slip card on every scan
                 run(c, 600)
             os.environ["NEW_ONLY"] = "1"; os.environ["SKIP_GOBLINS"] = "1"
             run(["_pair2x.py"], 900)
-            os.environ.pop("NEW_ONLY", None)
+            os.environ.pop("NEW_ONLY", None); os.environ.pop("CARD_DRYRUN", None)
             done["%s %02d:%02d scan" % (day, now.hour, now.minute)] = now.isoformat(timespec="minutes")
             json.dump(done, open(DONE_F, "w")); sync(); did = True
         if not did:
