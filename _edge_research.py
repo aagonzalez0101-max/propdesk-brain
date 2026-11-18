@@ -22,11 +22,18 @@ SH = {"nba": {"Points": "points", "Rebounds": "rebounds", "Assists": "assists", 
 
 def build():
     L = sqlite3.connect("lines.db"); c = sqlite3.connect("sports.db")
-    ix = collections.defaultdict(dict)
+    # 11/17 FIX: sharp snapshots run hourly INCLUDING during games (47% of NFL game-day snapshots were after kickoff = live prices).
+    # Only prices strictly before the PP start time count.
+    ix = collections.defaultdict(list)
     for book, sp, pl, st, ln, p, ts in L.execute("select book, sport, player, stat, line, p_over, ts from sharp where sport in ('NBA','NHL')"):
-        k = (sp, pl, st, ts[:10]); kk = (book, ln)
-        if kk not in ix[k] or ts > ix[k][kk][0]:
-            ix[k][kk] = (ts, p)
+        ix[(sp, pl, st)].append((datetime.datetime.fromisoformat(ts), book, ln, p))
+
+    def pregame(sp, pl, st, start):
+        t0 = datetime.datetime.fromisoformat(start); lo = t0 - datetime.timedelta(days=2); b = {}
+        for ts, book, ln, p in ix.get((sp, pl, st), []):
+            if lo <= ts < t0 and ((book, ln) not in b or ts > b[(book, ln)][0]):
+                b[(book, ln)] = (ts, p)
+        return b
     rows = []
     for sp, lg in (("nba", 7), ("nhl", 8)):
         ST = S.stats_for(sp)
@@ -73,7 +80,7 @@ def build():
                 f = D.dvp(k, e, opp)
                 mk = gap = None
                 if st in SH[sp]:
-                    b = ix.get((sp.upper(), norm(o["pl"]), SH[sp][st], day)) or ix.get((sp.upper(), norm(o["pl"]), SH[sp][st], prev)) or {}
+                    b = pregame(sp.upper(), norm(o["pl"]), SH[sp][st], o["start"])
                     ps = [p for (bk, l_), (_, p) in b.items() if l_ == ln]
                     mk = sum(ps) / len(ps) if ps else None
                     if b:

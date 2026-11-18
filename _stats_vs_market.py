@@ -17,11 +17,19 @@ norm = lambda s: re.sub(r"[^a-z]", "", (s or "").lower())
 
 def main():
     L = sqlite3.connect("lines.db"); S = sqlite3.connect("sports.db")
-    mk = collections.defaultdict(dict)    # (sport, player, stat, line, day) -> {book: (ts, p)}
+    # 11/17 FIX: the sharp archive snapshots hourly INCLUDING during games (47% of NFL game-day snapshots were after kickoff = live
+    # prices). Only prices strictly before the PP start time count. START = earliest PP start for (sport, player, PP stat, CT day).
+    CT = __import__("zoneinfo").ZoneInfo("America/Chicago")
+    START = {}
+    for lg, pl, st, start in L.execute("select league, player, stat, start from pp where kind='standard' and start is not null"):
+        if lg not in H.SPORT:
+            continue
+        t = datetime.datetime.fromisoformat(start); k = (H.SPORT[lg], norm(pl), st, t.astimezone(CT).date().isoformat())
+        if k not in START or t < START[k]:
+            START[k] = t
+    mk = collections.defaultdict(list)    # (sport, player, stat, line) -> [(ts, book, p)]
     for book, sp, pl, st, ln, p, ts in L.execute("select book, sport, player, stat, line, p_over, ts from sharp"):
-        k = (sp, pl, st, ln, ts[:10]); b = mk[k].get(book)
-        if not b or ts > b[0]:
-            mk[k][book] = (ts, p)
+        mk[(sp, pl, st, ln)].append((datetime.datetime.fromisoformat(ts), book, p))
     G = collections.defaultdict(list)
     for sp in ("NFL", "CFB", "NHL", "NBA", "WNBA", "MLB"):
         for pl, d, gid, st in S.execute("select player, date, game_id, stats from player_games where sport=?", (sp,)):
@@ -39,7 +47,13 @@ def main():
         if st not in SH or r["res_close"] == "push" or sp not in ("NFL", "CFB", "NHL", "NBA", "WNBA", "MLB"):
             continue
         day = r["day"]; prev = (datetime.date.fromisoformat(day) - datetime.timedelta(days=1)).isoformat()
-        books = mk.get((sp, norm(r["player"]), SH[st], ln, day)) or mk.get((sp, norm(r["player"]), SH[st], ln, prev))
+        t0 = START.get((sp, norm(r["player"]), st, day))
+        if t0 is None:
+            continue
+        books = {}
+        for ts, book, p in mk.get((sp, norm(r["player"]), SH[st], ln), []):
+            if t0 - datetime.timedelta(days=2) <= ts < t0 and (book not in books or ts > books[book][0]):
+                books[book] = (ts, p)
         if not books:
             continue
         p_over = sum(p for _, p in books.values()) / len(books)

@@ -157,8 +157,9 @@ def build():
     live = [r for r in L if r.get("kind") == "LIVE" and r.get("date", "") >= S and not r.get("exclude") and r.get("book") != "DraftKings"]   # 10/15 user: DK is solo, not on the road
     done = [r for r in live if r.get("result") in ("WIN", "LOSS", "PUSH", "VOID")]
     op = [r for r in live if r.get("result") in (None, "PENDING")]
-    added = sum(d["amount"] for d in deps)
-    bal = start + added + sum(r.get("net") or 0 for r in done)
+    added = sum(d["amount"] for d in deps if not d.get("reconcile"))
+    recon = sum(d["amount"] for d in deps if d.get("reconcile"))
+    bal = start + added + recon + sum(r.get("net") or 0 for r in done)
     cash_risk = sum(r.get("stake") or 0 for r in op if r.get("funding") != "bonus")
     bonus = sum(r.get("stake") or 0 for r in op if r.get("funding") == "bonus")
     frac = max(0.0, min(1.0, (bal - start) / (G - start)))
@@ -166,9 +167,9 @@ def build():
     bar = "🟩" * k + "⬛" * (12 - k)
     day = (datetime.datetime.now(CT).date() - datetime.date.fromisoformat(S)).days + 1
     w = sum(r["result"] == "WIN" for r in done); l = sum(r["result"] == "LOSS" for r in done)
-    profit = bal - start - added
+    profit = bal - start - added            # reconcile = unlogged results, so it counts against profit
     desc = ["**$%.2f** · day %d · %d-%d · %d open" % (bal, day, w, l, len(op)),
-            "Started **$%.2f** (%s)%s · betting profit **%+.2f**" % (start, S[5:], (" + $%.2f added" % added) if added else "", profit), ""]
+            "Started **$%.2f** (%s)%s · betting profit **%+.2f**" % (start, S[5:], ((" + $%.2f added" % added) if added else "") + ((" · %+.2f reconciled" % recon) if recon else ""), profit), ""]
     by = {}
     for r in done:
         by.setdefault(r["date"], []).append(r)
@@ -185,7 +186,8 @@ def build():
                     low = (run, d)
             for x in deps:
                 if x["date"] == d:
-                    run += x["amount"]; desc.append("`%s`  ➕ top-up %+.2f  → $%.2f" % (d[5:], x["amount"], run))
+                    run += x["amount"]
+                    desc.append("`%s`  %s %+.2f  → $%.2f" % (d[5:], "🔧 reconcile to PP balance" if x.get("reconcile") else "➕ top-up", x["amount"], run))
         desc.append("")
         if low[0] < start:
             desc.append("📉 Low **$%.2f** (%s) → now **$%.2f** = **%.1fx** off the bottom" % (low[0], low[1][5:], bal, bal / low[0]))
