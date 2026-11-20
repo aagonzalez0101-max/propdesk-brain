@@ -37,8 +37,12 @@ DAILY = [("grade_sports", (0, 45), [["_daily.py", "grade_sports"]], 7200, 3600),
          ("lines_mid", (15, 0), [["_dir_search.py", "score"], ["_cs2_live.py", "card"], ["_cs2_card.py"], ["_dota_proj.py"], ["_pair2x.py"]], 3600, 1200),
          # 10/14 user: "most of the wins were here" (tacos + preseason bench unders post in the afternoon) -> a pre-game evening card
          ("lines_eve", (17, 0), [["_promos.py"], ["_dir_search.py", "score"], ["_pair2x.py"]], 2400, 1200),
-         ("lines_pm", (21, 0), [["_daily.py", "lines"]], 5400, 2400)]
-HOURLY = [["_snap_lines.py"], ["_promos.py"], ["_sides.py", "moves"], ["_snap_sharps.py"], ["_raised.py"], ["_linewatch.py"], ["_dota_proj.py"]]   # 10/13: promos were laptop-only
+         ("lines_pm", (21, 0), [["_daily.py", "lines"]], 5400, 2400),
+         # 11/20 user: "max the cloud out" -- the 10-gate board (every sport, all gates) posts to Discord at 9 AM and 4 PM
+         ("board_am", (9, 0), [["_xcheck.py", "nba"], ["_xcheck.py", "nhl"], ["_check.py", "--all", "--post"]], 3600, 2400),
+         ("board_pm", (16, 0), [["_xcheck.py", "nba"], ["_xcheck.py", "nhl"], ["_check.py", "--all", "--post"]], 3600, 2400)]
+HOURLY = [["_snap_lines.py"], ["_promos.py"], ["_sides.py", "moves"], ["_snap_sharps.py"], ["_raised.py"], ["_linewatch.py"], ["_dota_proj.py"],
+          ["_guardian.py"], ["_clv.py"]]   # 11/20: slip guardian (open legs -> phone/Discord alert) + CLV tracker refresh   # 10/13: promos were laptop-only
 
 
 def load():
