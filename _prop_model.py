@@ -223,9 +223,15 @@ def tonight(day, train_path="edge_rows.json", N=10):
     if len(top) >= 3:
         lab = lambda x: "%s %s%g %s" % (x[1]["player"], x[2][0].upper(), x[1]["line"], x[1]["stat"])
         t1, t2, t3 = top[:3]
-        plan = [("MAIN 2-man", 30, (t1, t2)), ("RR 2-man", 10, (t1, t2)), ("RR 2-man", 10, (t1, t3)), ("RR 2-man", 10, (t2, t3)),
-                ("3-man POWER", 10, (t1, t2, t3))]
-        print("  TONIGHT'S PLAN ($70, tag MODEL):")
+        # 11/21 compounding: the whole plan = 10% of the current roll (road.json roll_now); split 3/7 main, 1/7 each other slip
+        try:
+            rd = json.load(open("road.json")); roll = float(rd.get("roll_now") or 310); pct = float(rd.get("model_plan_pct") or .10)
+        except Exception:
+            roll, pct = 310.0, .10
+        tot = roll * pct; big = max(1, round(tot * 3 / 7)); sm = max(1, round(tot / 7))
+        plan = [("MAIN 2-man", big, (t1, t2)), ("RR 2-man", sm, (t1, t2)), ("RR 2-man", sm, (t1, t3)), ("RR 2-man", sm, (t2, t3)),
+                ("3-man POWER", sm, (t1, t2, t3))]
+        print("  TONIGHT'S PLAN ($%d = %.0f%% of a $%.0f roll, tag MODEL):" % (big + 4 * sm, 100 * pct, roll))
         with open(PAPER, "a", encoding="utf-8") as f:
             for name, stake, legs in plan:
                 print("   $%-3d %-12s %s" % (stake, name, "  +  ".join(lab(x) for x in legs)))
@@ -233,7 +239,7 @@ def tonight(day, train_path="edge_rows.json", N=10):
                                         logged=ts, result=None)) + "\n")
         try:
             import _notify
-            _notify.send("CARD", "**MODEL PLAN %s ($70)**\n" % day + "\n".join("$%d %s: %s" % (st, nm, " + ".join(lab(x) for x in lg)) for nm, st, lg in plan))
+            _notify.send("CARD", "**MODEL PLAN %s ($%d)**\n" % (day, big + 4 * sm) +"\n".join("$%d %s: %s" % (st, nm, " + ".join(lab(x) for x in lg)) for nm, st, lg in plan))
         except Exception as e:
             print("post failed:", e)
     return top, slips
