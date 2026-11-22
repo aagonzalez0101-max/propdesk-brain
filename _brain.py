@@ -44,8 +44,10 @@ DAILY = [("grade_sports", (0, 45), [["_daily.py", "grade_sports"]], 7200, 3600),
          # 11/21 user: "log the top 10 every night ... put them into slips" -- prop model (walk-forward top-10 62.1%) paper card.
          # Features rebuilt at 3 AM (slow), paper legs graded at 11 AM, tonight's top 10 + slips scored at 4:30 PM.
          ("edge_build", (3, 0), [["_edge_research.py", "build"]], 7200, 5400),
-         ("model_grade", (11, 0), [["_prop_model.py", "grade"]], 1800, 300),
-         ("model_card", (16, 30), [["_prop_model.py", "tonight"]], 2400, 900)]
+         # 11/22: ONE plan per day -- 4:30 PM re-ran the model on evening lines and posted a 2nd plan after the morning one was placed.
+         # Card at 11:00 AM CT (injury news mostly in, before weekend/early tips); grade at 10:00.
+         ("model_grade", (10, 0), [["_prop_model.py", "grade"]], 1800, 300),
+         ("model_card", (11, 0), [["_prop_model.py", "tonight"]], 2400, 900)]
 HOURLY = [["_snap_lines.py"], ["_promos.py"], ["_sides.py", "moves"], ["_snap_sharps.py"], ["_raised.py"], ["_linewatch.py"], ["_dota_proj.py"],
           ["_guardian.py"], ["_clv.py"]]   # 11/20: slip guardian (open legs -> phone/Discord alert) + CLV tracker refresh   # 10/13: promos were laptop-only
 
