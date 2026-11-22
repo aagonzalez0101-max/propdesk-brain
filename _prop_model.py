@@ -218,6 +218,24 @@ def tonight(day, train_path="edge_rows.json", N=10):
     for j, (a, b) in enumerate(slips, 1):
         print("   %d. %s %s%g %s  +  %s %s%g %s" % (j, a[1]["player"], a[2][0].upper(), a[1]["line"], a[1]["stat"],
                                                b[1]["player"], b[2][0].upper(), b[1]["line"], b[1]["stat"]))
+    # 11/21 user plan (replay 10/21-11/18: +$580 on $2,030, best of every combo tested): top 3 legs ->
+    # main 2-man $30 (#1+#2), round robin 2-mans $10 (#1+#2, #1+#3, #2+#3), 3-man power $10 (#1+#2+#3) = $70/night
+    if len(top) >= 3:
+        lab = lambda x: "%s %s%g %s" % (x[1]["player"], x[2][0].upper(), x[1]["line"], x[1]["stat"])
+        t1, t2, t3 = top[:3]
+        plan = [("MAIN 2-man", 30, (t1, t2)), ("RR 2-man", 10, (t1, t2)), ("RR 2-man", 10, (t1, t3)), ("RR 2-man", 10, (t2, t3)),
+                ("3-man POWER", 10, (t1, t2, t3))]
+        print("  TONIGHT'S PLAN ($70, tag MODEL):")
+        with open(PAPER, "a", encoding="utf-8") as f:
+            for name, stake, legs in plan:
+                print("   $%-3d %-12s %s" % (stake, name, "  +  ".join(lab(x) for x in legs)))
+                f.write(json.dumps(dict(kind="plan", day=day, name=name, stake=stake, legs=[[x[1]["player"], x[1]["stat"], x[1]["line"], x[2]] for x in legs],
+                                        logged=ts, result=None)) + "\n")
+        try:
+            import _notify
+            _notify.send("CARD", "**MODEL PLAN %s ($70)**\n" % day + "\n".join("$%d %s: %s" % (st, nm, " + ".join(lab(x) for x in lg)) for nm, st, lg in plan))
+        except Exception as e:
+            print("post failed:", e)
     return top, slips
 
 
@@ -253,7 +271,18 @@ def grade_paper():
             rs = [legres.get((r["day"], p, st)) for p, st, ln, sd in r["legs"]]
             if all(x in ("W", "L", "P") for x in rs):
                 r["result"] = "L" if "L" in rs else ("W" if all(x == "W" for x in rs) else "P")
+    for r in rows:                                                        # plan slips: power payouts 2-man 3x, 3-man 6x; push = leg dropped
+        if r["kind"] == "plan" and r.get("result") is None:
+            rs = [legres.get((r["day"], p, st)) for p, st, ln, sd in r["legs"]]
+            if all(x in ("W", "L", "P") for x in rs):
+                live = [x for x in rs if x != "P"]
+                mult = {3: 6, 2: 3, 1: 1, 0: 1}[len(live)]
+                r["result"] = "L" if "L" in live else "W"
+                r["net"] = -r["stake"] if r["result"] == "L" else round(r["stake"] * (mult - 1), 2)
     open(PAPER, "w", encoding="utf-8").write("".join(json.dumps(r) + "\n" for r in rows))
+    Pl = [r for r in rows if r["kind"] == "plan" and r.get("net") is not None]
+    if Pl:
+        print("MODEL PLAN paper: %d slips, net %+.2f" % (len(Pl), sum(r["net"] for r in Pl)))
     Lg = [r for r in rows if r["kind"] == "leg" and r.get("result") in ("W", "L")]
     Sl = [r for r in rows if r["kind"] == "slip" and r.get("result") in ("W", "L")]
     w = sum(r["result"] == "W" for r in Lg)
