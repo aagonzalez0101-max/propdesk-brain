@@ -229,7 +229,8 @@ def tonight(day, train_path="edge_rows.json", N=10):
         except Exception:
             roll, pct = 310.0, .10
         tot = roll * pct; big = max(1, round(tot * 3 / 7)); sm = max(1, round(tot / 7))
-        plan = [("MAIN 2-man", big, (t1, t2)), ("RR 2-man", sm, (t1, t2)), ("RR 2-man", sm, (t1, t3)), ("RR 2-man", sm, (t2, t3)),
+        # user 11/22: the RR's #1+#2 repeats the main pair -> enter it ONCE at main+RR stake (same money as the backtest)
+        plan = [("MAIN 2-man", big + sm, (t1, t2)), ("RR 2-man", sm, (t1, t3)), ("RR 2-man", sm, (t2, t3)),
                 ("3-man POWER", sm, (t1, t2, t3))]
         print("  TONIGHT'S PLAN ($%d = %.0f%% of a $%.0f roll, tag MODEL):" % (big + 4 * sm, 100 * pct, roll))
         with open(PAPER, "a", encoding="utf-8") as f:
