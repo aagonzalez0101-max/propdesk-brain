@@ -325,7 +325,10 @@ def all_board():
         if not (now < st < now + datetime.timedelta(hours=30)) or (r["player"], r["stat"], r["line"]) in seen:
             continue
         seen.add((r["player"], r["stat"], r["line"]))
-        g, gm = check_tennis(r["player"], r["stat"], r["line"], r["side"])
+        try:
+            g, gm = check_tennis(r["player"], r["stat"], r["line"], r["side"])
+        except RuntimeError as e:                                         # PP cooldown on the tennis league: skip tennis, keep the board
+            print("tennis skipped:", e); break
         out.append(("tennis", "%s %s %s%g" % (r["player"], r["stat"], r["side"][0].upper(), r["line"]), g, gm, r["player"]))
     seen = set()
     for l in open("cs2_paper.jsonl", encoding="utf-8"):
@@ -340,7 +343,10 @@ def all_board():
         if not (now < st < now + datetime.timedelta(hours=30)) or k in seen:
             continue
         seen.add(k)
-        g, gm = check_cs2(r)
+        try:
+            g, gm = check_cs2(r)
+        except RuntimeError as e:                                         # PP cooldown on CS2: skip CS2, keep the board
+            print("cs2 skipped:", e); break
         out.append(("cs2", "%s U%s %s" % (r.get("player"), r.get("pp_line"), (r.get("stat") or "").replace(" on Maps 1+2", "")), g, gm, r.get("player")))
     return out
 

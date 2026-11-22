@@ -149,7 +149,8 @@ def canon(n):
     return " ".join(sorted(n.split()))
 
 
-ALIAS = {"angus ng ka long": "ng ka long", "ng ka long angus": "ng ka long"}   # same player listed two ways on Wikipedia
+ALIAS = {"angus ng ka long": "ng ka long", "ng ka long angus": "ng ka long", "ka long angus ng": "ng ka long",
+         "moh zaki ubaidillah": "zaki ubaidillah", "rakshitha sree santhosh ramraj": "rakshitha ramraj"}   # same player listed two ways on Wikipedia
 
 
 def elo_rows(M):
@@ -216,7 +217,11 @@ BOARD = [  # (disc, side A surnames, side B surnames, PP line, CT start)
 def _match(q, name):
     """every token of the query is a prefix of a token of the name ('Man W' matches 'chong man wei')"""
     toks = name.split()
-    return all(any(t.startswith(x) for t in toks) for x in canon(q).split())
+    if all(any(t.startswith(x) for t in toks) for x in canon(q).split()):
+        return True
+    import itertools                                  # 'Yu Fei Chen' == 'Chen Yufei', 'Ka Long Angus Ng' == 'Angus Ng Ka Long'
+    qt = [t for t in canon(q).split() if t != "angus"]; nm = name.replace(" ", "").replace("angus", "")
+    return len(qt) <= 4 and any("".join(pp) == nm for pp in itertools.permutations(qt))
 
 
 def find(R, disc, sur):
@@ -258,9 +263,11 @@ def price():
     for disc, A, B, L, t in board:
         if disc is None:                                   # PP doesn't say the discipline: the one where both sides resolve uniquely
             opts = (("MS", "WS") if len(A) == 1 else ("MD", "WD", "XD"))
-            ok = [d_ for d_ in opts if len(find(R, d_, A)) == 1 and len(find(R, d_, B)) == 1]
+            ok = [d_ for d_ in opts if find(R, d_, A) and find(R, d_, B)]
             disc = ok[0] if len(ok) == 1 else opts[0]
         ha, hb = find(R, disc, A), find(R, disc, B)
+        ha = [max(ha, key=lambda h: N[h[0]])] if ha else ha   # same person spelled two ways -> the record with the history
+        hb = [max(hb, key=lambda h: N[h[0]])] if hb else hb
         if len(ha) != 1 or len(hb) != 1:
             print("%-34s %5.1f  ?     not found / ambiguous (%d, %d)" % (" + ".join(A) + " v " + " + ".join(B), L, len(ha), len(hb)), [h[0][1] for h in ha + hb][:4]); continue
         (ka, ra), (kb, rb) = ha[0], hb[0]

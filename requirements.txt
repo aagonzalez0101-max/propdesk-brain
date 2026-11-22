@@ -4,3 +4,4 @@ scipy
 pandas
 pillow
 youtube-transcript-api
+scikit-learn

@@ -75,7 +75,7 @@ def main():
             if start <= now:
                 continue                                           # game started: nothing left to guard
         tag = "%s %s%g %s" % (g["player"], g["side"][:1].upper(), g["line"], g["stat"])
-        if boards[lg] is not None and not rows:
+        if boards[lg] is not None and not rows and now.hour < 18:            # PP drops lines at tip-off: after 6 PM CT a missing line is usually just a started game
             alerts.append(("pulled|" + tag, "LINE PULLED: %s -- PrizePicks no longer lists it (injury/scratch news likely)" % tag))
         else:
             std = [float(a["line_score"]) for a in rows if a.get("odds_type") == "standard"]
