@@ -111,3 +111,67 @@ if __name__ == "__main__":
         log(sys.argv[2] if len(sys.argv) > 2 else datetime.date.today().isoformat())
     else:
         grade()
+
+
+# ---------------- PAPER LADDER (user 11/23) ----------------
+# One active ladder. Each step = the day's highest-edge Kalshi leg with price 0.33-0.75 (+200 .. -300) and edge >= 3 pts after
+# fee, never a player on a PP slip. No qualifying leg -> the ladder pauses (doesn't break). At 4x the starting $5 goes back
+# to the roll (house money after that); at 10x cash out and restart. A loss busts the ladder -> restart at $5 next day.
+LADDER = "kalshi_ladder.json"
+L_START, L_LOCK, L_TARGET, L_MIN, L_MAX = 5.0, 4.0, 10.0, 0.33, 0.75
+
+
+def _lstate():
+    import os
+    if os.path.exists(LADDER):
+        return json.load(open(LADDER))
+    return dict(stack=L_START, locked=False, steps=[], history=[], pending=None)
+
+
+def ladder_step(day):
+    st = _lstate()
+    if st.get("pending"):
+        print("ladder: step pending (%s)" % st["pending"]["player"]); return
+    rows = [json.loads(l) for l in open(LEDGER, encoding="utf-8") if l.strip()]
+    cand = [r for r in rows if r["day"] == day and r.get("price") and L_MIN <= r["price"] <= L_MAX and (r.get("edge") or 0) >= .03
+            and not r.get("on_pp")]
+    if not cand:
+        print("ladder: no qualifying leg today -- paused at $%.2f" % st["stack"]); json.dump(st, open(LADDER, "w"), indent=1); return
+    c = max(cand, key=lambda r: r["edge"])
+    st["pending"] = dict(day=day, player=c["player"], stat=c["stat"], side=c["side"], price=c["price"], stake=st["stack"])
+    json.dump(st, open(LADDER, "w"), indent=1)
+    print("ladder step %d: $%.2f on %s %s %s @ %.0fc (edge %+.0f)" % (len(st["steps"]) + 1, st["stack"], c["player"], c["stat"],
+          c["side"], 100 * c["price"], 100 * c["edge"]))
+
+
+def ladder_settle():
+    st = _lstate(); p = st.get("pending")
+    if not p:
+        return
+    res = {(r["day"], r["player"], r["stat"]): r.get("result") for r in
+           (json.loads(l) for l in open("prop_model_paper.jsonl", encoding="utf-8") if l.strip()) if r.get("kind") == "leg"}
+    x = res.get((p["day"], p["player"], p["stat"]))
+    if x not in ("W", "L", "P"):
+        return
+    p["result"] = x; st["steps"].append(p); st["pending"] = None
+    if x == "W":
+        st["stack"] = round(p["stake"] / (p["price"] + fee(p["price"])), 2)
+        if not st["locked"] and st["stack"] >= L_START * L_LOCK:
+            st["stack"] -= L_START; st["locked"] = True; st["history"].append(dict(event="lock_start_back", amount=L_START))
+        if st["stack"] >= L_START * (L_TARGET - (1 if st["locked"] else 0)):
+            st["history"].append(dict(event="CASHED", amount=st["stack"], steps=len(st["steps"])))
+            st.update(stack=L_START, locked=False, steps=[])
+    elif x == "L":
+        st["history"].append(dict(event="BUST", lost=0 if st["locked"] else L_START, steps=len(st["steps"])))
+        st.update(stack=L_START, locked=False, steps=[])
+    json.dump(st, open(LADDER, "w"), indent=1)
+    h = st["history"]; cashed = sum(e["amount"] for e in h if e["event"] == "CASHED"); back = sum(e["amount"] for e in h if e["event"] == "lock_start_back")
+    lost = sum(e["lost"] for e in h if e["event"] == "BUST")
+    print("LADDER paper: %d cashed, %d busts | net $%+.2f (+ current stack $%.2f)" % (sum(e["event"] == "CASHED" for e in h),
+          sum(e["event"] == "BUST" for e in h), cashed + back - lost - L_START * sum(e["event"] == "CASHED" for e in h), st["stack"]))
+
+
+if __name__ == "__main__" and sys.argv[1:2] == ["log"]:
+    ladder_step(sys.argv[2] if len(sys.argv) > 2 else datetime.date.today().isoformat())
+if __name__ == "__main__" and sys.argv[1:2] in (["grade"], []):
+    ladder_settle()
