@@ -220,9 +220,21 @@ def tonight(day, train_path="edge_rows.json", N=10, run=""):
                                                b[1]["player"], b[2][0].upper(), b[1]["line"], b[1]["stat"]))
     # 11/21 user plan (replay 10/21-11/18: +$580 on $2,030, best of every combo tested): top 3 legs ->
     # main 2-man $30 (#1+#2), round robin 2-mans $10 (#1+#2, #1+#3, #2+#3), 3-man power $10 (#1+#2+#3) = $70/night
-    if len(top) >= 3:
+    # 11/23 user ("why does discord show sabonis"): the PLAN only uses legs that also pass FORM -- season >= 60% on our side
+    # AND >= 6 of the last 10 (l10o is a 0-1 rate). Sabonis O13.5 (58%, 5/10) was the model's #2 but his own numbers said under.
+    # The full top-10 paper log is unchanged; only the bet plan skips form failures and takes the next leg down.
+    def form_ok(t):
+        r, s = t[1], t[2]
+        season = r["so"] if s == "over" else 1 - r["so"]
+        l10 = r["l10o"] if s == "over" else 1 - r["l10o"]
+        return season >= .60 and l10 >= .60 - 1e-9
+    plan_legs = [t for t in top if form_ok(t)]
+    skipped = [t for t in top[:len(top)] if not form_ok(t)][:3]
+    if skipped:
+        print("  plan skips (fail form): " + ", ".join("%s %s%g %s" % (x[1]["player"], x[2][0].upper(), x[1]["line"], x[1]["stat"]) for x in skipped))
+    if len(plan_legs) >= 3:
         lab = lambda x: "%s %s%g %s" % (x[1]["player"], x[2][0].upper(), x[1]["line"], x[1]["stat"])
-        t1, t2, t3 = top[:3]
+        t1, t2, t3 = plan_legs[:3]
         # 11/21 compounding: the whole plan = 10% of the current roll (road.json roll_now); split 3/7 main, 1/7 each other slip
         try:
             rd = json.load(open("road.json")); roll = float(rd.get("roll_now") or 310); pct = float(rd.get("model_plan_pct") or .10)
