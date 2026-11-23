@@ -39,7 +39,7 @@ DAILY = [("grade_sports", (0, 45), [["_daily.py", "grade_sports"]], 7200, 3600),
          ("lines_eve", (17, 0), [["_promos.py"], ["_dir_search.py", "score"], ["_pair2x.py"]], 2400, 1200),
          ("lines_pm", (21, 0), [["_daily.py", "lines"]], 5400, 2400),
          # 11/20 user: "max the cloud out" -- the 10-gate board (every sport, all gates) posts to Discord at 9 AM and 4 PM
-         ("board_am", (9, 0), [["_xcheck.py", "nba"], ["_xcheck.py", "nhl"], ["_check.py", "--all", "--post"]], 3600, 2400),
+         ("board_am", (7, 0), [["_xcheck.py", "nba"], ["_xcheck.py", "nhl"], ["_check.py", "--all", "--post"]], 3600, 2400),
          ("board_pm", (16, 0), [["_xcheck.py", "nba"], ["_xcheck.py", "nhl"], ["_check.py", "--all", "--post"]], 3600, 2400),
          # 11/21 user: "log the top 10 every night ... put them into slips" -- prop model (walk-forward top-10 62.1%) paper card.
          # Features rebuilt at 3 AM (slow), paper legs graded at 11 AM, tonight's top 10 + slips scored at 4:30 PM.
@@ -49,7 +49,7 @@ DAILY = [("grade_sports", (0, 45), [["_daily.py", "grade_sports"]], 7200, 3600),
          ("model_grade", (10, 0), [["_prop_model.py", "grade"]], 1800, 300),
          # 11/23 user: TIMING TEST -- card at 8:00 AM (early lines) and 11:30 AM (after sharps + injury news); both logged with
          # run=am/mid and graded separately; he plays ONE plan per day. Pick the better time after ~2 weeks.
-         ("model_card_am", (8, 0), [["_prop_model.py", "tonight", "", "", "am"]], 2400, 900),
+         ("model_card_am", (6, 30), [["_prop_model.py", "tonight", "", "", "am"]], 2400, 900),
          ("model_card", (11, 30), [["_prop_model.py", "tonight", "", "", "mid"]], 2400, 900),
          # 11/22: Kalshi props paper test -- price the model's legs on Kalshi, paper-bet $1 when our hit rate beats price+fee by 3 pts
          ("kalshi_grade", (10, 10), [["_kalshi_paper.py", "grade"]], 900, 120),
