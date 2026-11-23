@@ -259,7 +259,9 @@ def tonight(day, train_path="edge_rows.json", N=10, run=""):
             if r["sp"] not in Dc:
                 Dc[r["sp"]] = S2.Data(day, r["sp"])
             g, _ = K.check_team_leg(r["sp"], r["player"], r["stat"], r["line"], s, Dc[r["sp"]])
-            bad = [k for k in (1, 4, 5, 6, 7, 8, 9) if g.get(k, (K.NA,))[0] == K.F]
+            # 11/23 MONDAY REVIEW: form/proj/role/defense/h2h gates did NOT improve the 29-day replay (+$520 vs +$580 raw) -> only
+            # the SAFETY gates block a model leg: 1 = line live, 9 = context (new teammate absence on an under, bad line move).
+            bad = [k for k in (1, 9) if g.get(k, (K.NA,))[0] == K.F]
             if bad:
                 gate_why[r["player"]] = "gate %s: %s" % (bad[0], g[bad[0]][1][:60]); return False
             return True
@@ -269,9 +271,6 @@ def tonight(day, train_path="edge_rows.json", N=10, run=""):
     plan_legs = []
     game = lambda t: tuple(sorted([t[1].get("team") or "", t[1].get("opp") or ""]))
     for t in top:
-        if not form_ok(t):
-            gate_why[t[1]["player"]] = "form"
-            continue
         if any(game(t) == game(x) for x in plan_legs):           # 11/23: Giddey + Meleek Thomas were the same CHI-CLE game
             gate_why[t[1]["player"]] = "same game as another plan leg"
             continue
@@ -306,7 +305,7 @@ def tonight(day, train_path="edge_rows.json", N=10, run=""):
             if DRY:
                 raise RuntimeError("dry run: not posted")
             label = {"am": "EARLY 8 AM", "mid": "SHARP 11:30 AM"}.get(run, run.upper()) if run else ""
-            head = "**MODEL PLAN %s%s ($%d)** -- legs passed form + the 10 checks\n" % (day, (" -- " + label) if label else "", big + 4 * sm)
+            head = "**MODEL PLAN %s%s ($%d)** -- safety-checked (injury, new absences, live line, one leg per game)\n" % (day, (" -- " + label) if label else "", big + 4 * sm)
             body = "\n".join("$%d %s: %s" % (st, nm, " + ".join(lab(x) for x in lg)) for nm, st, lg in plan)
             skip = ("\n_skipped: " + "; ".join("%s (%s)" % (x[1]["player"], gate_why[x[1]["player"]]) for x in skipped) + "_") if skipped else ""
             note = "\n_8 AM + 11:30 AM posts are a timing test -- play ONE plan per day_" if run in ("am", "mid") else ""
