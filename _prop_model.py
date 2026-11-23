@@ -253,6 +253,9 @@ def tonight(day, train_path="edge_rows.json", N=10, run=""):
 
         def gates_ok(t):
             r, s = t[1], t[2]
+            # 11/23 review: UNDER while minutes are rising (last 3 >= 115% of season) -- replay +$760 vs +$580 raw -> kept
+            if s == "under" and (r.get("min_tr") or 1) >= 1.15:
+                gate_why[r["player"]] = "under with minutes rising (%.0f%%)" % (100 * r["min_tr"]); return False
             st_ = inj.get(S2.nn(r["player"]), "")
             if r["sp"] == "nba" and st_.lower() in ("out", "doubtful", "questionable"):
                 gate_why[r["player"]] = "injury: " + st_; return False
