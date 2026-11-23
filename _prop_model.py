@@ -202,7 +202,9 @@ def tonight(day, train_path="edge_rows.json", N=10, run=""):
         pool.remove(b)
         slips.append((a, b))
     ts = datetime.datetime.now().isoformat(timespec="seconds")
-    with open(PAPER, "a", encoding="utf-8") as f:
+    import os as _os2
+    DRY = bool(_os2.environ.get("DRYRUN"))
+    with open(_os2.devnull if DRY else PAPER, "a", encoding="utf-8") as f:
         for i, (p, r, s) in enumerate(top, 1):
             f.write(json.dumps(dict(kind="leg", run=run, day=day, rank=i, sp=r["sp"], player=r["player"], team=r.get("team"), opp=r.get("opp"),
                                     stat=r["stat"], line=r["line"], side=s, p=round(p, 3), start=r["start"], logged=ts, result=None)) + "\n")
@@ -228,10 +230,55 @@ def tonight(day, train_path="edge_rows.json", N=10, run=""):
         season = r["so"] if s == "over" else 1 - r["so"]
         l10 = r["l10o"] if s == "over" else 1 - r["l10o"]
         return season >= .60 and l10 >= .60 - 1e-9
-    plan_legs = [t for t in top if form_ok(t)]
-    skipped = [t for t in top[:len(top)] if not form_ok(t)][:3]
+    # 11/23 user: "does the cloud post have our 10 checks?" -> every plan candidate also runs _check.py's gates (1 live line,
+    # 4 form, 5 projection, 6 minutes/role, 7 defense, 8 head-to-head, 9 context = new absences/back-to-back/line move) + ESPN
+    # injury status (skip OUT/doubtful/questionable). Gate 2 (card rule) and 3 (sharp value) are not required: the MODEL is the
+    # rule for these legs. Any FAIL on 1/4-9 -> skip to the next leg. N/A (no data) does not block.
+    gate_why = {}
+    try:
+        import os as _os
+        _os.environ["CHECK_DAY"] = day
+        import _check as K, _stack as S2
+        Dc = {}
+        inj = {}
+        try:
+            import urllib.request as _u
+            d_ = json.load(_u.urlopen(_u.Request("https://site.api.espn.com/apis/site/v2/sports/basketball/nba/injuries",
+                                                 headers={"User-Agent": "Mozilla/5.0"}), timeout=30))
+            for t_ in d_.get("injuries", []):
+                for i_ in t_.get("injuries", []):
+                    inj[S2.nn(i_["athlete"]["displayName"])] = (i_.get("status") or "")
+        except Exception:
+            pass
+
+        def gates_ok(t):
+            r, s = t[1], t[2]
+            st_ = inj.get(S2.nn(r["player"]), "")
+            if r["sp"] == "nba" and st_.lower() in ("out", "doubtful", "questionable"):
+                gate_why[r["player"]] = "injury: " + st_; return False
+            if r["sp"] not in Dc:
+                Dc[r["sp"]] = S2.Data(day, r["sp"])
+            g, _ = K.check_team_leg(r["sp"], r["player"], r["stat"], r["line"], s, Dc[r["sp"]])
+            bad = [k for k in (1, 4, 5, 6, 7, 8, 9) if g.get(k, (K.NA,))[0] == K.F]
+            if bad:
+                gate_why[r["player"]] = "gate %s: %s" % (bad[0], g[bad[0]][1][:60]); return False
+            return True
+    except Exception as e:
+        print("  (gate check unavailable: %s -- form filter only)" % e)
+        gates_ok = lambda t: True
+    plan_legs = []
+    for t in top:
+        if not form_ok(t):
+            gate_why[t[1]["player"]] = "form"
+            continue
+        if gates_ok(t):
+            plan_legs.append(t)
+        if len(plan_legs) >= 3:
+            break
+    skipped = [t for t in top if t[1]["player"] in gate_why]
     if skipped:
-        print("  plan skips (fail form): " + ", ".join("%s %s%g %s" % (x[1]["player"], x[2][0].upper(), x[1]["line"], x[1]["stat"]) for x in skipped))
+        print("  plan skips: " + ", ".join("%s %s%g %s (%s)" % (x[1]["player"], x[2][0].upper(), x[1]["line"], x[1]["stat"],
+                                                              gate_why[x[1]["player"]]) for x in skipped))
     if len(plan_legs) >= 3:
         lab = lambda x: "%s %s%g %s" % (x[1]["player"], x[2][0].upper(), x[1]["line"], x[1]["stat"])
         t1, t2, t3 = plan_legs[:3]
@@ -245,14 +292,21 @@ def tonight(day, train_path="edge_rows.json", N=10, run=""):
         plan = [("MAIN 2-man", big + sm, (t1, t2)), ("RR 2-man", sm, (t1, t3)), ("RR 2-man", sm, (t2, t3)),
                 ("3-man POWER", sm, (t1, t2, t3))]
         print("  TONIGHT'S PLAN ($%d = %.0f%% of a $%.0f roll, tag MODEL):" % (big + 4 * sm, 100 * pct, roll))
-        with open(PAPER, "a", encoding="utf-8") as f:
+        with open(_os2.devnull if DRY else PAPER, "a", encoding="utf-8") as f:
             for name, stake, legs in plan:
                 print("   $%-3d %-12s %s" % (stake, name, "  +  ".join(lab(x) for x in legs)))
                 f.write(json.dumps(dict(kind="plan", run=run, day=day, name=name, stake=stake, legs=[[x[1]["player"], x[1]["stat"], x[1]["line"], x[2]] for x in legs],
                                         logged=ts, result=None)) + "\n")
         try:
             import _notify
-            _notify.send("CARD", "**MODEL PLAN %s ($%d)**\n" % (day, big + 4 * sm) +"\n".join("$%d %s: %s" % (st, nm, " + ".join(lab(x) for x in lg)) for nm, st, lg in plan))
+            if DRY:
+                raise RuntimeError("dry run: not posted")
+            label = {"am": "EARLY 8 AM", "mid": "SHARP 11:30 AM"}.get(run, run.upper()) if run else ""
+            head = "**MODEL PLAN %s%s ($%d)** -- legs passed form + the 10 checks\n" % (day, (" -- " + label) if label else "", big + 4 * sm)
+            body = "\n".join("$%d %s: %s" % (st, nm, " + ".join(lab(x) for x in lg)) for nm, st, lg in plan)
+            skip = ("\n_skipped: " + "; ".join("%s (%s)" % (x[1]["player"], gate_why[x[1]["player"]]) for x in skipped) + "_") if skipped else ""
+            note = "\n_8 AM + 11:30 AM posts are a timing test -- play ONE plan per day_" if run in ("am", "mid") else ""
+            _notify.send("CARD", head + body + skip + note)
         except Exception as e:
             print("post failed:", e)
     return top, slips
