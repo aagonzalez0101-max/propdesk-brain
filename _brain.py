@@ -47,7 +47,10 @@ DAILY = [("grade_sports", (0, 45), [["_daily.py", "grade_sports"]], 7200, 3600),
          # 11/22: ONE plan per day -- 4:30 PM re-ran the model on evening lines and posted a 2nd plan after the morning one was placed.
          # Card at 11:00 AM CT (injury news mostly in, before weekend/early tips); grade at 10:00.
          ("model_grade", (10, 0), [["_prop_model.py", "grade"]], 1800, 300),
-         ("model_card", (11, 0), [["_prop_model.py", "tonight"]], 2400, 900)]
+         ("model_card", (11, 0), [["_prop_model.py", "tonight"]], 2400, 900),
+         # 11/22: Kalshi props paper test -- price the model's legs on Kalshi, paper-bet $1 when our hit rate beats price+fee by 3 pts
+         ("kalshi_grade", (10, 10), [["_kalshi_paper.py", "grade"]], 900, 120),
+         ("kalshi_paper", (11, 40), [["_kalshi_paper.py", "log"]], 900, 180)]
 HOURLY = [["_snap_lines.py"], ["_promos.py"], ["_sides.py", "moves"], ["_snap_sharps.py"], ["_raised.py"], ["_linewatch.py"], ["_dota_proj.py"],
           ["_guardian.py"], ["_clv.py"]]   # 11/20: slip guardian (open legs -> phone/Discord alert) + CLV tracker refresh   # 10/13: promos were laptop-only
 

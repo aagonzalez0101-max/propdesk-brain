@@ -166,6 +166,7 @@ MERGE_KEYS = {
     # 10/13: the cloud's older calls_log overwrote 445 locally graded NBA/NHL rows -> every graded ledger merges row by row
     "calls_log.jsonl": lambda r: (r.get("sport"), r.get("date"), r.get("player"), r.get("stat"), r.get("line"), r.get("call"), r.get("venue"), r.get("logged")),
     "raised_paper.jsonl": lambda r: r.get("proj_id"),
+    "kalshi_paper.jsonl": lambda r: (r.get("day"), r.get("player"), r.get("stat"), r.get("logged")),
     "prop_model_paper.jsonl": lambda r: (r.get("kind"), r.get("day"), r.get("player") or r.get("slip"), r.get("stat"), r.get("logged")),
     "dota_paper.jsonl": lambda r: (r.get("date"), r.get("player"), r.get("stat"), r.get("line"), r.get("side")),
     "nfl_odd_paper.jsonl": lambda r: (r.get("date"), r.get("player"), r.get("stat"), r.get("line"), r.get("side")),
