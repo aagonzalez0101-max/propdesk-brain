@@ -42,6 +42,13 @@ def log(day):
     legs = [json.loads(l) for l in open("prop_model_paper.jsonl", encoding="utf-8") if l.strip()]
     legs = [r for r in legs if r.get("kind") == "leg" and r.get("day") == day and r.get("sp") == "nba"]
     seen = {(json.loads(l)["day"], json.loads(l)["player"], json.loads(l)["stat"]) for l in open(LEDGER, encoding="utf-8")} if __import__("os").path.exists(LEDGER) else set()
+    pp_players = set()                                            # every player on a LIVE PrizePicks slip, by game day
+    for l in open("live_paper.jsonl", encoding="utf-8"):
+        if l.strip():
+            x = json.loads(l)
+            if x.get("kind") == "LIVE" and (x.get("book") or "PrizePicks") == "PrizePicks":
+                for g in x.get("legs") or []:
+                    pp_players.add(((x.get("game_date") or x.get("date")), nn(g.get("player"))))
     cache, n = {}, 0
     for r in legs:
         if (day, r["player"], r["stat"]) in seen or r["stat"] not in SERIES:
@@ -58,16 +65,18 @@ def log(day):
         row = dict(day=day, player=r["player"], stat=r["stat"], pp_line=r["line"], side=r["side"], rank=r["rank"], model_p=r["p"],
                    our_chance=chance, kalshi=None, price=None, edge=None, bet=False, result=None, net=None,
                    logged=datetime.datetime.now().isoformat(timespec="seconds"))
+        on_pp = (day, nn(r["player"])) in pp_players         # NO DOUBLE DIPPING (user 11/23): a player already on a PrizePicks slip
+        row["on_pp"] = on_pp                                    # that day never gets a Kalshi bet too
         if m:
             price = m["yes"] if r["side"] == "over" else m["no"]
             if 0 < price < 1:
                 edge = chance - (price + fee(price))
-                row.update(kalshi=m["ticker"], price=price, edge=round(edge, 4), bet=edge >= .03)
+                row.update(kalshi=m["ticker"], price=price, edge=round(edge, 4), bet=edge >= .03 and not on_pp)
         with open(LEDGER, "a", encoding="utf-8") as f:
             f.write(json.dumps(row) + "\n")
         n += 1
         print("%-22s %-14s %s%-5g rank %d -> %s" % (r["player"][:22], r["stat"][:14], r["side"][0].upper(), r["line"], r["rank"],
-              ("kalshi %.0fc, edge %+.0f pts -> %s" % (100 * row["price"], 100 * row["edge"], "PAPER BET $1" if row["bet"] else "pass"))
+              ("kalshi %.0fc, edge %+.0f pts -> %s" % (100 * row["price"], 100 * row["edge"], "PAPER BET $1" if row["bet"] else ("pass (on a PP slip -- no double dip)" if row.get("on_pp") else "pass")))
               if row["price"] else "no Kalshi rung"))
     print("logged %d legs for %s" % (n, day))
 
