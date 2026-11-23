@@ -23,10 +23,13 @@ def open_legs(today):
         r = json.loads(l)
         if r.get("kind") != "LIVE" or r.get("result") not in (None, "PENDING") or (r.get("game_date") or r.get("date")) < today:
             continue
+        sport = (r.get("sport") or "").upper()
+        if "+" in sport or "1Q" in sport or "1H" in sport or "2H" in sport:
+            continue                     # 11/23: mixed-sport and period slips live on other PP boards (NFL/tennis/1Q) -> not guardable here
         for x in r.get("legs") or []:
-            if x.get("result") in ("W", "L"):
+            if x.get("result") in ("W", "L") or "(" in (x.get("stat") or ""):
                 continue
-            sp = next((s for s in ("NBA", "NHL") if s in (r.get("sport") or "").upper()), None)
+            sp = next((s for s in ("NBA", "NHL") if s in sport), None)
             if sp and x.get("player") and x.get("line") is not None:
                 out.append(dict(sp=sp, player=x["player"], stat=x.get("stat"), line=float(x["line"]), side=(x.get("side") or "").lower(),
                                 slip="%s %s" % (r.get("market", "")[:20], r.get("stake"))))
