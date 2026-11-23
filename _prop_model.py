@@ -167,7 +167,7 @@ def today_rows(day):
     return out
 
 
-def tonight(day, train_path="edge_rows.json", N=10):
+def tonight(day, train_path="edge_rows.json", N=10, run=""):
     global STATS
     import datetime
     T = [r for r in json.load(open(train_path)) if r.get("real") and r.get("act") is not None]
@@ -204,10 +204,10 @@ def tonight(day, train_path="edge_rows.json", N=10):
     ts = datetime.datetime.now().isoformat(timespec="seconds")
     with open(PAPER, "a", encoding="utf-8") as f:
         for i, (p, r, s) in enumerate(top, 1):
-            f.write(json.dumps(dict(kind="leg", day=day, rank=i, sp=r["sp"], player=r["player"], team=r.get("team"), opp=r.get("opp"),
+            f.write(json.dumps(dict(kind="leg", run=run, day=day, rank=i, sp=r["sp"], player=r["player"], team=r.get("team"), opp=r.get("opp"),
                                     stat=r["stat"], line=r["line"], side=s, p=round(p, 3), start=r["start"], logged=ts, result=None)) + "\n")
         for j, (a, b) in enumerate(slips, 1):
-            f.write(json.dumps(dict(kind="slip", day=day, slip=j, legs=[[x[1]["player"], x[1]["stat"], x[1]["line"], x[2]] for x in (a, b)],
+            f.write(json.dumps(dict(kind="slip", run=run, day=day, slip=j, legs=[[x[1]["player"], x[1]["stat"], x[1]["line"], x[2]] for x in (a, b)],
                                     logged=ts, result=None)) + "\n")
     print("PROP MODEL TOP %d -- %s (paper; backtest top-10 62.6%% walk-forward, halves 63.8%% / 61.4%%)" % (N, day))
     for i, (p, r, s) in enumerate(top, 1):
@@ -236,7 +236,7 @@ def tonight(day, train_path="edge_rows.json", N=10):
         with open(PAPER, "a", encoding="utf-8") as f:
             for name, stake, legs in plan:
                 print("   $%-3d %-12s %s" % (stake, name, "  +  ".join(lab(x) for x in legs)))
-                f.write(json.dumps(dict(kind="plan", day=day, name=name, stake=stake, legs=[[x[1]["player"], x[1]["stat"], x[1]["line"], x[2]] for x in legs],
+                f.write(json.dumps(dict(kind="plan", run=run, day=day, name=name, stake=stake, legs=[[x[1]["player"], x[1]["stat"], x[1]["line"], x[2]] for x in legs],
                                         logged=ts, result=None)) + "\n")
         try:
             import _notify
@@ -287,6 +287,12 @@ def grade_paper():
                 r["result"] = "L" if "L" in live else "W"
                 r["net"] = -r["stake"] if r["result"] == "L" else round(r["stake"] * (mult - 1), 2)
     open(PAPER, "w", encoding="utf-8").write("".join(json.dumps(r) + "\n" for r in rows))
+    for run in sorted({r.get("run") or "" for r in rows if r["kind"] == "leg"}):   # 11/23 timing test: 8 AM vs 11:30 AM cards
+        Lr = [r for r in rows if r["kind"] == "leg" and (r.get("run") or "") == run and r.get("result") in ("W", "L")]
+        Pr = [r for r in rows if r["kind"] == "plan" and (r.get("run") or "") == run and r.get("net") is not None]
+        if Lr:
+            print("  run %-4s legs %d-%d (%.1f%%) | plan net %+.2f over %d slips" % (run or "-", sum(r["result"] == "W" for r in Lr),
+                  sum(r["result"] == "L" for r in Lr), 100 * sum(r["result"] == "W" for r in Lr) / len(Lr), sum(r["net"] for r in Pr), len(Pr)))
     Pl = [r for r in rows if r["kind"] == "plan" and r.get("net") is not None]
     if Pl:
         print("MODEL PLAN paper: %d slips, net %+.2f" % (len(Pl), sum(r["net"] for r in Pl)))
@@ -299,6 +305,7 @@ def grade_paper():
 
 if __name__ == "__main__" and sys.argv[1:2] == ["tonight"]:
     import datetime as _d
-    tonight(sys.argv[2] if len(sys.argv) > 2 else _d.date.today().isoformat(), sys.argv[3] if len(sys.argv) > 3 else "edge_rows.json")
+    tonight(sys.argv[2] if len(sys.argv) > 2 and sys.argv[2] else _d.date.today().isoformat(),
+            sys.argv[3] if len(sys.argv) > 3 and sys.argv[3] else "edge_rows.json", run=sys.argv[4] if len(sys.argv) > 4 else "")
 if __name__ == "__main__" and sys.argv[1:2] == ["grade"]:
     grade_paper()
