@@ -267,9 +267,13 @@ def tonight(day, train_path="edge_rows.json", N=10, run=""):
         print("  (gate check unavailable: %s -- form filter only)" % e)
         gates_ok = lambda t: True
     plan_legs = []
+    game = lambda t: tuple(sorted([t[1].get("team") or "", t[1].get("opp") or ""]))
     for t in top:
         if not form_ok(t):
             gate_why[t[1]["player"]] = "form"
+            continue
+        if any(game(t) == game(x) for x in plan_legs):           # 11/23: Giddey + Meleek Thomas were the same CHI-CLE game
+            gate_why[t[1]["player"]] = "same game as another plan leg"
             continue
         if gates_ok(t):
             plan_legs.append(t)
