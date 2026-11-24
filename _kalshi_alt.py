@@ -167,13 +167,44 @@ def injuries():
         return {}
 
 
+COMBO_MIN_P, COMBO_PAY, COMBO_EDGE, COMBO_MAX = .70, (1.55, 2.3), .02, 8
+
+
+def build_combos(pool, done, now):
+    """11/24 user: "I'd take like 70 and 80% ... until they are like 2x or close to it, even a 1.6x". Legs our number has at 70%+ and
+    priced at or under it; 2-3 legs from DIFFERENT games; cost = product of (ask + fee) per leg (= buying leg 1 and rolling the $1 into
+    leg 2), pays $1 -> payout 1/cost. Keep 1.55x-2.3x with (our combined chance - cost) >= 2 pts; each leg used once; best 8 a run."""
+    import itertools
+    pool = sorted(pool, key=lambda l: -(l["p"] - l["price"] - l["fee"]))[:40]
+    cand = []
+    for k in (2, 3):
+        for c in itertools.combinations(pool, k):
+            if len({l["game"] for l in c}) < k:
+                continue
+            cost = math.prod(l["price"] + l["fee"] for l in c); p = math.prod(l["p"] for l in c)
+            if COMBO_PAY[0] <= 1 / cost <= COMBO_PAY[1] and p - cost >= COMBO_EDGE:
+                cand.append((p - cost, c, cost, p))
+    out, used = [], set()
+    for e, c, cost, p in sorted(cand, key=lambda x: -x[0]):
+        key = "+".join(sorted("%s:%s" % (l["ticker"], l["side"]) for l in c))
+        if any(l["ticker"] in used for l in c) or ("COMBO:" + key) in done:
+            continue
+        used |= {l["ticker"] for l in c}
+        out.append(dict(ts=now.isoformat(timespec="seconds"), day=now.strftime("%Y-%m-%d"), kind="COMBO", ticker="COMBO:" + key,
+                        desc=" + ".join(l["desc"] for l in c), side="all", price=round(cost, 4), fee=0, p=round(p, 3), edge=round(e, 3),
+                        legs=[{k2: l[k2] for k2 in ("ticker", "side", "desc", "price", "fee", "p")} for l in c], result=None))
+        if len(out) == COMBO_MAX:
+            break
+    return out
+
+
 def run():
     now = datetime.datetime.now(CT)
     done = set()
     if os.path.exists(OUT):
         done = {(json.loads(l)["ticker"]) for l in open(OUT, encoding="utf-8") if l.strip()}
     C = candidates(); OWN = own_rates(); INJ = injuries()
-    bets, seen = [], 0
+    bets, seen, pool = [], 0, []
     for c in C:
         kind, m, desc, pf = c[:4]
         p_sharp = pf if kind == "PROP" else None
@@ -194,7 +225,7 @@ def run():
             if not (LO <= ask <= HI) or not bid or ask - bid > MAXSPR:
                 continue
             e = p - ask - fee(ask)
-            if e < (EDGE_PROP if kind == "PROP" else EDGE):
+            if e < 0:
                 continue
             why = ""
             if kind == "PROP":
@@ -215,11 +246,20 @@ def run():
                 why = "season %d/%d, L10 %d/10, min %.0f%%%s" % (sum(x > m["floor_strike"] for x in v) if side == "yes" else sum(x <= m["floor_strike"] for x in v),
                       len(v), round(10 * l10s) if len(l10) == 10 else round(len(l10) * l10s), 100 * tr,
                       ", sharp %.0f%%" % (100 * (p_sharp if side == "yes" else 1 - p_sharp)) if p_sharp is not None else "")
-            bets.append(dict(ts=now.isoformat(timespec="seconds"), day=now.strftime("%Y-%m-%d"), kind=kind, ticker=m["ticker"], desc=desc,
-                             side=side, price=ask, fee=fee(ask), p=round(p, 3), edge=round(e, 3), close=m["close_time"], why=why, result=None,
-                             p_sharp=(round(p_sharp if side == "yes" else 1 - p_sharp, 3) if p_sharp is not None else None)))
+            leg = dict(ts=now.isoformat(timespec="seconds"), day=now.strftime("%Y-%m-%d"), kind=kind, ticker=m["ticker"], desc=desc,
+                       side=side, price=ask, fee=fee(ask), p=round(p, 3), edge=round(e, 3), close=m["close_time"], why=why, result=None,
+                       p_sharp=(round(p_sharp if side == "yes" else 1 - p_sharp, 3) if p_sharp is not None else None),
+                       game=m["event_ticker"].split("-", 1)[1][:13])
+            if p >= COMBO_MIN_P and ask <= .92:
+                pool.append(leg)                                  # 11/24 user: 70-80% legs stacked to ~1.6-2x
+            if e >= (EDGE_PROP if kind == "PROP" else EDGE):
+                bets.append(leg)
             break
-    print("KALSHI ALT PAPER %s: %d rungs priced, %d bets (edge >= %.0f pts after fee)" % (now.strftime("%m-%d %H:%M"), seen, len(bets), 100 * EDGE))
+    combos = build_combos(pool, done, now)
+    print("KALSHI ALT PAPER %s: %d rungs priced, %d bets (edge >= %.0f pts after fee), %d combos" % (now.strftime("%m-%d %H:%M"), seen, len(bets), 100 * EDGE, len(combos)))
+    for c in combos:
+        print("  COMBO %.2fx  cost %.0fc  ours %.0f%%  edge +%.1f  | %s" % (1 / c["price"], 100 * c["price"], 100 * c["p"], 100 * c["edge"],
+              " + ".join("%s %s@%.0f" % (l["desc"][:30], l["side"].upper(), 100 * l["price"]) for l in c["legs"])))
     for b in sorted(bets, key=lambda b: -b["edge"])[:40]:
         print("  %-6s %-46s %-3s @ %.2f (+%.2f fee)  fair %.0f%%  edge +%.1f  %s" % (b["kind"], b["desc"][:46], b["side"].upper(), b["price"], b["fee"], 100 * b["p"], 100 * b["edge"], b["why"]))
     if os.environ.get("DRYRUN"):
@@ -234,6 +274,17 @@ def grade():
     B = [json.loads(l) for l in open(OUT, encoding="utf-8") if l.strip()]
     n = 0
     for b in B:
+        if b.get("result") is None and b["kind"] == "COMBO":
+            rs = []
+            for l in b["legs"]:
+                try:
+                    rs.append(get("%s/markets/%s" % (KAL, l["ticker"])).get("market", {}).get("result"))
+                except Exception:
+                    rs.append(None)
+            if all(r in ("yes", "no") for r in rs):
+                win = all(r == l["side"] for r, l in zip(rs, b["legs"]))
+                b["result"] = "W" if win else "L"; b["net"] = round((1 - b["price"]) if win else -b["price"], 4); n += 1
+            continue
         if b.get("result") is None:
             try:
                 m = get("%s/markets/%s" % (KAL, b["ticker"])).get("market", {})
@@ -249,8 +300,8 @@ def grade():
                                                                          # run were picked off sharp books, before the switch to our numbers
     print("graded %d new; total %d settled, %d open" % (n, len(G), len(B) - len(G)))
     sl = {"ML": lambda b: b["kind"] == "ML", "TOTAL": lambda b: b["kind"] == "TOTAL", "SPREAD": lambda b: b["kind"] == "SPREAD",
-          "PROP": lambda b: b["kind"] == "PROP", "edge1-2": lambda b: b["edge"] < .02, "edge2-3": lambda b: .02 <= b["edge"] < .03,
-          "edge3+": lambda b: b["edge"] >= .03,
+          "PROP": lambda b: b["kind"] == "PROP", "COMBO": lambda b: b["kind"] == "COMBO", "edge1-2": lambda b: b["edge"] < .02, "edge2-3": lambda b: .02 <= b["edge"] < .03,
+          "edge3+": lambda b: b["edge"] >= .03 and b["kind"] != "COMBO",
           "PROP sharp-ok": lambda b: b["kind"] == "PROP" and b.get("p_sharp") is not None and b["p_sharp"] >= b["price"] + b["fee"],
           "PROP sharp-no": lambda b: b["kind"] == "PROP" and b.get("p_sharp") is not None and b["p_sharp"] < b["price"] + b["fee"],
           "ALL": lambda b: True}
