@@ -61,7 +61,12 @@ DAILY = [("grade_sports", (0, 45), [["_daily.py", "grade_sports"]], 7200, 3600),
          # 11/24 user: tennis goblins (edge 6+: 84-19) as PARTNERS for a standard/promo leg -- top 3 posted 6:20 AM + 6:00 PM (overnight tennis)
          ("tennis_card", (6, 20), [["_tennis_card.py"]], 1800, 600),
          ("tennis_card_pm", (18, 0), [["_tennis_card.py"]], 1800, 600),
-         ("tennis_card_grade", (10, 25), [["_tennis_pp.py", "grade"], ["_tennis_card.py", "grade"]], 1800, 300)]
+         ("tennis_card_grade", (10, 25), [["_tennis_pp.py", "grade"], ["_tennis_card.py", "grade"]], 1800, 300),
+         # 11/24 user: Kalshi alt-line / ML / totals PAPER bot (1 contract, real ask + rounded fee, pregame only), 3 passes + nightly grade
+         ("kalshi_alt_am", (12, 40), [["_kalshi_alt.py"]], 1200, 300),
+         ("kalshi_alt_pm", (17, 15), [["_kalshi_alt.py"]], 1200, 300),
+         ("kalshi_alt_late", (19, 45), [["_kalshi_alt.py"]], 1200, 300),
+         ("kalshi_alt_grade", (10, 40), [["_kalshi_alt.py", "grade"]], 1800, 300)]
 HOURLY = [["_snap_lines.py"], ["_promos.py"], ["_sides.py", "moves"], ["_snap_sharps.py"], ["_raised.py"], ["_linewatch.py"], ["_dota_proj.py"],
           ["_guardian.py"], ["_clv.py"]]   # 11/20: slip guardian (open legs -> phone/Discord alert) + CLV tracker refresh   # 10/13: promos were laptop-only
 
