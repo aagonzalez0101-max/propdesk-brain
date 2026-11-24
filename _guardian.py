@@ -17,7 +17,11 @@ LEAGUE = {"NBA": 7, "NHL": 8}
 
 def open_legs(today):
     out = []
-    for l in open("live_paper.jsonl", encoding="utf-8"):
+    lines = []
+    for f in ("live_paper.jsonl", "live_paper_krispy.jsonl"):        # 11/24: two bettors (ScarOGC + krispyspirit)
+        if os.path.exists(f):
+            lines += open(f, encoding="utf-8").read().splitlines()
+    for l in lines:
         if not l.strip():
             continue
         r = json.loads(l)
@@ -31,7 +35,9 @@ def open_legs(today):
                 continue
             sp = next((s for s in ("NBA", "NHL") if s in sport), None)
             if sp and x.get("player") and x.get("line") is not None:
-                out.append(dict(sp=sp, player=x["player"], stat=x.get("stat"), line=float(x["line"]), side=(x.get("side") or "").lower(),
+                tagl = (r.get("system_tag") or "").lower()
+                promo = "taco" in tagl and (x.get("note") == "TACO" or x["player"].split()[-1].lower() in tagl)
+                out.append(dict(sp=sp, player=x["player"], stat=x.get("stat"), line=float(x["line"]), side=(x.get("side") or "").lower(), promo=promo,
                                 slip="%s %s" % (r.get("market", "")[:20], r.get("stake"))))
     return out
 
@@ -82,7 +88,7 @@ def main():
             alerts.append(("pulled|" + tag, "LINE PULLED: %s -- PrizePicks no longer lists it (injury/scratch news likely)" % tag))
         else:
             std = [float(a["line_score"]) for a in rows if a.get("odds_type") == "standard"]
-            if std and g["line"] not in std:
+            if std and g["line"] not in std and not g.get("promo"):          # 11/24: a taco/promo line sits off the standard by design
                 good = (std[0] > g["line"]) == (g["side"] == "over")          # over: line went up = you hold the better number
                 alerts.append(("move|%s|%s" % (tag, std[0]), "LINE MOVED %s: %s -- standard now %g (you hold %g)" % (
                     "IN YOUR FAVOR" if good else "AGAINST YOU", tag, std[0], g["line"])))
