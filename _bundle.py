@@ -298,7 +298,8 @@ def put(files):
                     nm = m.name.lstrip("./")
                     if nm in MERGE_KEYS and m.isfile():              # row-merged files: keep the cloud's rows too, never overwrite them
                         remote = src.extractfile(m).read().decode("utf-8")
-                        open(nm, "w", encoding="utf-8").write(merge_rows(open(nm, encoding="utf-8").read(), remote, MERGE_KEYS[nm]))
+                        merged = merge_rows(open(nm, encoding="utf-8").read(), remote, MERGE_KEYS[nm])   # 11/24 bug: open(nm,"w") ran first and
+                        open(nm, "w", encoding="utf-8").write(merged)                                    # truncated the local rows before the read
                     continue
                 dst.addfile(m, src.extractfile(m) if m.isfile() else None)
             for f in files:
