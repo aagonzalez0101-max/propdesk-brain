@@ -224,10 +224,40 @@ def _match(q, name):
     return len(qt) <= 4 and any("".join(pp) == nm for pp in itertools.permutations(qt))
 
 
+def _loose(q, name):
+    """11/24: PP 'Krishnamurthy Roy P' = Wikipedia 'Pruthvi Roy'; 'Pratheek.K S' = 'Sai Pratheek K.' -- one surname token + every initial"""
+    toks = name.split(); qt = canon(q).split()
+    longs = [x for x in qt if len(x) >= 3]; ini = [x for x in qt if len(x) < 3]
+    return any(any(t == x or t.startswith(x) for t in toks) for x in longs) and all(any(t.startswith(i) for t in toks) for i in ini)
+
+
+def _initial(q, name):
+    qt = canon(q).split(); ini = [x for x in qt if len(x) < 3] or [x[0] for x in qt]
+    return all(any(t.startswith(i) for t in name.split()) for i in ini)
+
+
+def pair_match(sur, names):
+    """strict first; doubles fallback: one partner matches by surname, the other at least by initial (PP 'Rethinasabapathi R' = Wiki 'Ruban Kumar')"""
+    if len(sur) != len(names):
+        return False
+    if all(any(_match(s_, n) for n in names) for s_ in sur) and all(any(_match(s_, n) for s_ in sur) for n in names):
+        return True
+    import itertools
+    for perm in itertools.permutations(names):
+        ok = [_match(s_, n) or _loose(s_, n) for s_, n in zip(sur, perm)]
+        if len(sur) == 2 and any(ok) and all(o or _initial(s_, n) for o, s_, n in zip(ok, sur, perm)):
+            return True
+        if len(sur) == 1 and ok[0]:
+            return True
+    return False
+
+
 def find(R, disc, sur):
     hit = [(k, v) for k, v in R.items() if k[0] == disc and len(k[1]) == len(sur)
            and all(any(_match(s_, n) for n in k[1]) for s_ in sur)
            and all(any(_match(s_, n) for s_ in sur) for n in k[1])]
+    if not hit:                                          # 11/24 fallback: PP and Wikipedia spell Indian/doubles names differently
+        hit = [(k, v) for k, v in R.items() if k[0] == disc and pair_match(sur, k[1])]
     return hit
 
 
@@ -243,11 +273,11 @@ def pp_board():
             a = x["attributes"]; nm = P.get(x["relationships"]["new_player"]["data"]["id"], {}).get("name", "")
             f.write(json.dumps(dict(ts=datetime.datetime.now(CT).isoformat(timespec="minutes"), pid=x["id"], player=nm, opp=a.get("description"),
                                     stat=a["stat_type"], kind=a.get("odds_type"), sides=a.get("allowed_wager_types"), line=float(a["line_score"]), start=a["start_time"]), ensure_ascii=False) + "\n")
-            if a["stat_type"] != "Total Points" or a.get("odds_type") != "standard":
+            if a["stat_type"] not in ("Total Points", "1st Game Total Points") or a.get("odds_type") != "standard":
                 continue
             A = [z.strip() for z in nm.split("+")]; B = [z.strip() for z in (a.get("description") or "").split("+")]
             t = datetime.datetime.fromisoformat(a["start_time"]).astimezone(CT).strftime("%a %I:%M %p")
-            out.append((None, A, B, float(a["line_score"]), t))
+            out.append((None, A, B, float(a["line_score"]), t, a["stat_type"]))
     return out
 
 
@@ -260,7 +290,12 @@ def price():
     board = BOARD if os.environ.get("BADM_TYPED") else pp_board()
     print("PP badminton board: %d standard Total Points lines" % len(board))
     print("%-34s %-6s %5s  %-28s %s" % ("match", "line", "fav%", "similar matches: over / under (n)", "call"))
-    for disc, A, B, L, t in board:
+    G1 = collections.defaultdict(list)                     # 11/24: game-1 totals by discipline (walk-forward: matchup adds nothing, 61.2% vs 61.1%)
+    for r in rows:
+        if r["ym"] >= "2024":
+            G1[r["disc"]].append(r["g1"])
+    for row in board:
+        disc, A, B, L, t = row[:5]; stat = row[5] if len(row) > 5 else "Total Points"
         if disc is None:                                   # PP doesn't say the discipline: the one where both sides resolve uniquely
             opts = (("MS", "WS") if len(A) == 1 else ("MD", "WD", "XD"))
             ok = [d_ for d_ in opts if find(R, d_, A) and find(R, d_, B)]
@@ -271,6 +306,12 @@ def price():
         if len(ha) != 1 or len(hb) != 1:
             print("%-34s %5.1f  ?     not found / ambiguous (%d, %d)" % (" + ".join(A) + " v " + " + ".join(B), L, len(ha), len(hb)), [h[0][1] for h in ha + hb][:4]); continue
         (ka, ra), (kb, rb) = ha[0], hb[0]
+        if stat.startswith("1st Game"):
+            o = statistics.mean(x > L for x in G1[disc])
+            call = "paper-O" if o >= .577 else "paper-U" if 1 - o >= .577 else "pass"   # 11/24: these calls went 13-15 on graded PP lines -> paper only
+            print("%-34s %5.1f  1ST GAME %s  over %4.1f%% / under %4.1f%% (n=%d, %s 2024+)  %-5s | %s" % (
+                (" + ".join(A) + " v " + " + ".join(B))[:34], L, disc, 100 * o, 100 * (1 - o), len(G1[disc]), disc, call, t))
+            continue
         pa = 1 / (1 + 10 ** ((rb - ra) / 400)); f = max(pa, 1 - pa)
         sim = [r for r in rows if r["disc"] == disc and abs(max(r["pa"], 1 - r["pa"]) - f) <= .05 and r["na"] >= 5 and r["nb"] >= 5]
         o = statistics.mean(r["tot"] > L for r in sim) if sim else float("nan")

@@ -51,8 +51,7 @@ def lines():
 
 def side_match(pp_side, names):
     toks = [z.strip() for z in pp_side.split("+") if z.strip()]
-    can = [B.canon(n) for n in names]
-    return len(toks) == len(can) and all(any(B._match(t, c) for c in can) for t in toks)
+    return B.pair_match(toks, [B.canon(n) for n in names])
 
 
 def grade():
