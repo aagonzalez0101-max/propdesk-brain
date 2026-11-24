@@ -169,7 +169,10 @@ def today_rows(day):
 
 def tonight(day, train_path="edge_rows.json", N=10, run=""):
     global STATS
-    import datetime
+    import datetime, os
+    built = datetime.date.fromtimestamp(os.path.getmtime(train_path))
+    if (datetime.date.fromisoformat(day) - built).days > 1:          # 11/24: a laptop run on 3-day-old edge_rows gave a different top 10 than the cloud
+        raise SystemExit("STALE: %s built %s, today %s -- the cloud's card is the official one; pull the bundle before running locally" % (train_path, built, day))
     T = [r for r in json.load(open(train_path)) if r.get("real") and r.get("act") is not None]
     rows = today_rows(day)
     STATS = sorted({r["stat"] for r in T} | {r["stat"] for r in rows})
