@@ -167,7 +167,7 @@ def injuries():
         return {}
 
 
-COMBO_MIN_P, COMBO_PAY, COMBO_EDGE, COMBO_MAX = .70, (1.55, 2.3), .02, 8
+COMBO_MIN_P, COMBO_MAX_P, COMBO_PAY, COMBO_EDGE, COMBO_MAX = .65, .85, (1.8, 4.0), .02, 8   # user: "3-5 legs at 65-85% ... anything over 1.8x"
 
 
 def build_combos(pool, done, now):
@@ -175,9 +175,9 @@ def build_combos(pool, done, now):
     priced at or under it; 2-3 legs from DIFFERENT games; cost = product of (ask + fee) per leg (= buying leg 1 and rolling the $1 into
     leg 2), pays $1 -> payout 1/cost. Keep 1.55x-2.3x with (our combined chance - cost) >= 2 pts; each leg used once; best 8 a run."""
     import itertools
-    pool = sorted(pool, key=lambda l: -(l["p"] - l["price"] - l["fee"]))[:40]
+    pool = sorted(pool, key=lambda l: -(l["p"] - l["price"] - l["fee"]))[:24]
     cand = []
-    for k in (2, 3):
+    for k in (3, 4, 5):
         for c in itertools.combinations(pool, k):
             if len({l["game"] for l in c}) < k:
                 continue
@@ -250,7 +250,7 @@ def run():
                        side=side, price=ask, fee=fee(ask), p=round(p, 3), edge=round(e, 3), close=m["close_time"], why=why, result=None,
                        p_sharp=(round(p_sharp if side == "yes" else 1 - p_sharp, 3) if p_sharp is not None else None),
                        game=m["event_ticker"].split("-", 1)[1][:13])
-            if p >= COMBO_MIN_P and ask <= .92:
+            if COMBO_MIN_P <= p <= COMBO_MAX_P and ask <= .92:
                 pool.append(leg)                                  # 11/24 user: 70-80% legs stacked to ~1.6-2x
             if e >= (EDGE_PROP if kind == "PROP" else EDGE):
                 bets.append(leg)
