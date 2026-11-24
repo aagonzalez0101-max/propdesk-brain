@@ -254,8 +254,26 @@ def tonight(day, train_path="edge_rows.json", N=10, run=""):
         except Exception:
             pass
 
+        SH = {}                                                   # 11/24 user: "add the sharp gate now" -- sharp consensus per PP line
+        try:
+            import _xcheck as X
+            for row in X.board(sorted({x[1]["sp"].upper() for x in top})):
+                if row.get("n_sharp"):
+                    po = row["p"] if row["side"] == "over" else 1 - row["p"]
+                    SH[(S2.nn(row["player"]), row["stat"], float(row["line"]))] = (po, row["n_sharp"])
+        except Exception as e:
+            print("  (sharp gate unavailable: %s)" % e)
+
         def gates_ok(t):
             r, s = t[1], t[2]
+            # 11/24 SHARP GATE (user, effective immediately): skip a leg the sharp books price as an underdog on our side.
+            # Backtest 11/16: sharp 57-60% at PP's number hit 61% (n=241); 50-54% hit 51%. 11/24 plan legs were all ~48% at the books.
+            # A missing sharp price never blocks a leg (feedback_no_pinnacle_gate).
+            sh = SH.get((S2.nn(r["player"]), r["stat"], float(r["line"])))
+            if sh:
+                ours = sh[0] if s == "over" else 1 - sh[0]
+                if ours < .50:
+                    gate_why[r["player"]] = "sharp books %.0f%% on our side (%d sharp)" % (100 * ours, sh[1]); return False
             # 11/23 review: UNDER while minutes are rising (last 3 >= 115% of season) -- replay +$760 vs +$580 raw -> kept
             if s == "under" and (r.get("min_tr") or 1) >= 1.15:
                 gate_why[r["player"]] = "under with minutes rising (%.0f%%)" % (100 * r["min_tr"]); return False
