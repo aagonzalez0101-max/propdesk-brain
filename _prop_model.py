@@ -9,6 +9,7 @@ import sys, json, math, collections, statistics
 import numpy as np
 from sklearn.ensemble import HistGradientBoostingClassifier
 
+SHARP_GATE = False   # 11/24: built on request, then backtested -- blocked legs 63.9% (n=36) vs kept 55.6%; prints the sharp % only
 FEATS = ["so", "l5o", "l10o", "avg_rel", "med_rel", "po", "pu", "z", "defn", "min5", "min_tr", "rest", "move", "mkt", "gap", "last2o", "n", "line"]
 STATS = None
 
@@ -272,7 +273,8 @@ def tonight(day, train_path="edge_rows.json", N=10, run=""):
             sh = SH.get((S2.nn(r["player"]), r["stat"], float(r["line"])))
             if sh:
                 ours = sh[0] if s == "over" else 1 - sh[0]
-                if ours < .50:
+                # OFF 11/24 same day: walk-forward top-10 legs the gate would block went 23-13 (63.9%) vs 169-135 (55.6%) kept -> it cut winners
+                if SHARP_GATE and ours < .50:
                     gate_why[r["player"]] = "sharp books %.0f%% on our side (%d sharp)" % (100 * ours, sh[1]); return False
             # 11/23 review: UNDER while minutes are rising (last 3 >= 115% of season) -- replay +$760 vs +$580 raw -> kept
             if s == "under" and (r.get("min_tr") or 1) >= 1.15:
