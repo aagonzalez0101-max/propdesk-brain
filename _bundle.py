@@ -292,6 +292,10 @@ def put(files):
         with tarfile.open(dp, "r:gz") as src, tarfile.open(bp, "w:gz") as dst:
             for m in src.getmembers():
                 if m.name.lstrip("./") in files:
+                    nm = m.name.lstrip("./")
+                    if nm in MERGE_KEYS and m.isfile():              # row-merged files: keep the cloud's rows too, never overwrite them
+                        remote = src.extractfile(m).read().decode("utf-8")
+                        open(nm, "w", encoding="utf-8").write(merge_rows(open(nm, encoding="utf-8").read(), remote, MERGE_KEYS[nm]))
                     continue
                 dst.addfile(m, src.extractfile(m) if m.isfile() else None)
             for f in files:

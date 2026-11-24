@@ -5,6 +5,8 @@ Backtest (cloud soccer_paper, 10/1-11/23, one slip/day): shots 2-pick 16/36 cash
 Legs: shots unders 200-119 (62.7%, Oct 61% / Nov 67%), dribble unders 57-23. Goalie saves (47% Nov) and crosses (1-9 Nov) never.
 Stake = the card slip size (feedback_card_cap: $15, $20 once the roll passes $400). Separate from the NBA model plan.
     python _soccer_card.py            # build + post today's soccer 2-pick (DRYRUN=1: print only)
+    python _soccer_card.py tomorrow   # 11/24 user: run it the NIGHT BEFORE (~10 PM): fresh screen of tomorrow, post + log, push to cloud;
+                                      # the 6:15 AM cloud run then sees the card is already in and skips
     python _soccer_card.py grade      # settle soccer_card.jsonl from graded soccer_paper rows
 """
 import os, sys, json, datetime
@@ -38,8 +40,14 @@ def live_lines():
     return out, S.nn
 
 
-def build():
-    now = datetime.datetime.now(CT); day = now.strftime("%Y-%m-%d")
+def build(tomorrow=False):
+    import subprocess
+    now = datetime.datetime.now(CT)
+    day = (now + datetime.timedelta(days=1 if tomorrow else 0)).strftime("%Y-%m-%d")
+    if os.path.exists(OUT) and any(json.loads(l).get("day") == day for l in open(OUT, encoding="utf-8") if l.strip()):
+        print("soccer card for %s is already in (logged the night before) -- skipping" % day); return
+    if tomorrow:                                                    # fresh screen of tomorrow's PP soccer board first
+        subprocess.run([sys.executable, "_soccer.py", day], timeout=1800, env=dict(os.environ, PYTHONIOENCODING="utf-8"))
     R = [r for r in rows_for(day) if r.get("start") and datetime.datetime.fromisoformat(r["start"]).astimezone(CT) > now + datetime.timedelta(minutes=10)]
     try:
         live, nn = live_lines()
@@ -74,6 +82,8 @@ def build():
                                 legs=[dict(player=r["player"], stat=r["stat"], line=r["line"], side="under", p=r["p"], start=r["start"]) for r in legs])) + "\n")
     import _notify
     _notify.send("CARD", head + body + note)
+    if tomorrow:                                                    # the cloud must see it, or the 6:15 AM run posts a second slip
+        subprocess.run([sys.executable, "_bundle.py", "put", OUT, "soccer_paper.jsonl"], timeout=1800)
 
 
 def grade():
@@ -98,4 +108,4 @@ def grade():
 
 
 if __name__ == "__main__":
-    grade() if sys.argv[1:2] == ["grade"] else build()
+    grade() if sys.argv[1:2] == ["grade"] else build(tomorrow=sys.argv[1:2] == ["tomorrow"])
