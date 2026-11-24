@@ -275,6 +275,40 @@ def pull():
     print("pulled bundle (%s), ledger + paper files row-merged" % a["updated_at"])
 
 
+def put(files):
+    """11/24: push ONLY these laptop-owned files into the cloud bundle (e.g. road.json -- the cloud staked the card off a stale roll).
+    Download the current bundle, swap just these members, re-upload; nothing else changes on either side."""
+    import tarfile, io
+    for f in files:
+        if not os.path.exists(f):
+            raise SystemExit("no such file: %s" % f)
+    for attempt in range(3):
+        rel = release(); a = remote_asset(rel)
+        dp = "_put_%d.tar.gz" % os.getpid(); bp = "_putnew_%d.tar.gz" % os.getpid()
+        download(a, dp)
+        if not ok_gz(dp):
+            os.remove(dp); raise SystemExit("remote bundle corrupt -- not touching it")
+        with tarfile.open(dp, "r:gz") as src, tarfile.open(bp, "w:gz") as dst:
+            for m in src.getmembers():
+                if m.name.lstrip("./") in files:
+                    continue
+                dst.addfile(m, src.extractfile(m) if m.isfile() else None)
+            for f in files:
+                dst.add(f, arcname=f)
+        os.remove(dp)
+        if not ok_gz(bp):
+            os.remove(bp); raise SystemExit("new pack corrupt -- not uploading")
+        now = remote_asset(release())
+        if now and now["updated_at"] != a["updated_at"]:          # the cloud uploaded meanwhile -> redo on its copy
+            os.remove(bp); print("cloud uploaded during put -- retrying"); time.sleep(20); continue
+        api("https://api.github.com/repos/%s/releases/assets/%d" % (REPO, a["id"]), "DELETE")
+        res = api(rel["upload_url"].split("{")[0] + "?name=" + ASSET, "POST", open(bp, "rb").read(), "application/gzip")
+        os.remove(bp)
+        print("put %s into the cloud bundle (%s)" % (", ".join(files), res["updated_at"]))
+        return
+    raise SystemExit("put failed: the cloud kept uploading -- try again in a few minutes")
+
+
 def lines_only():
     """11/16: the CLOUD writes lines.db (hourly PP + sharp archive); the laptop copy goes stale between pulls (it sat at 10/31 for 16 days).
     Download the bundle and replace ONLY lines.db -- nothing else on the laptop changes."""
@@ -335,6 +369,8 @@ if __name__ == "__main__":
         push(force="--force" in sys.argv, cloud="--cloud" in sys.argv)
     elif cmd == "lines":
         lines_only()
+    elif cmd == "put":
+        put(sys.argv[2:])
     elif cmd == "pull":
         pull()
     elif cmd == "cold-push":
