@@ -88,6 +88,8 @@ def main():
             alerts.append(("pulled|" + tag, "LINE PULLED: %s -- PrizePicks no longer lists it (injury/scratch news likely)" % tag))
         else:
             std = [float(a["line_score"]) for a in rows if a.get("odds_type") == "standard"]
+            if rows and not std and not g.get("promo"):                       # 11/24: Sarr ast 1.5 went standard -> demon only (repricing on news)
+                alerts.append(("nostd|" + tag, "STANDARD PULLED: %s -- only demon/goblin lines left (PP repricing, check news)" % tag))
             if std and g["line"] not in std and not g.get("promo"):          # 11/24: a taco/promo line sits off the standard by design
                 good = (std[0] > g["line"]) == (g["side"] == "over")          # over: line went up = you hold the better number
                 alerts.append(("move|%s|%s" % (tag, std[0]), "LINE MOVED %s: %s -- standard now %g (you hold %g)" % (
