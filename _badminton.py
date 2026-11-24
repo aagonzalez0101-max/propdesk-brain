@@ -277,7 +277,28 @@ def pp_board():
                 continue
             A = [z.strip() for z in nm.split("+")]; B = [z.strip() for z in (a.get("description") or "").split("+")]
             t = datetime.datetime.fromisoformat(a["start_time"]).astimezone(CT).strftime("%a %I:%M %p")
-            out.append((None, A, B, float(a["line_score"]), t, a["stat_type"]))
+            out.append((None, A, B, float(a["line_score"]), t, a["stat_type"], nm, a["start_time"]))
+    return out
+
+
+def first_lines():
+    """11/24: the FIRST standard number PP posted per (player, stat, start) -- laptop hourly log + cloud lines.db (league 285)"""
+    F = {}
+    if os.path.exists("badminton_pp.jsonl"):
+        for l in open("badminton_pp.jsonl", encoding="utf-8"):
+            if l.strip():
+                r = json.loads(l)
+                k = (r["player"], r["stat"], r["start"])
+                if r.get("kind") == "standard" and (k not in F or r["ts"] < F[k][0]):
+                    F[k] = (r["ts"], r["line"])
+    out = {k: v[1] for k, v in F.items()}
+    try:
+        import sqlite3
+        for p_, st, ln, start, fs in sqlite3.connect("lines.db").execute(
+                "select player,stat,line,start,min(first_seen) from pp where league=285 and kind='standard' group by player,stat,start"):
+            out[(p_, st, start)] = max(out.get((p_, st, start), ln), ln)   # opening number = the highest seen (PP only steps DOWN)
+    except Exception:
+        pass
     return out
 
 
@@ -294,8 +315,14 @@ def price():
     for r in rows:
         if r["ym"] >= "2024":
             G1[r["disc"]].append(r["g1"])
+    FIRST = first_lines()
     for row in board:
         disc, A, B, L, t = row[:5]; stat = row[5] if len(row) > 5 else "Total Points"
+        opened = FIRST.get((row[6], stat, row[7])) if len(row) > 7 else None
+        if stat == "Total Points" and opened is not None and L < opened:
+            # 11/24 backtest: PP lowered a TOTAL overnight -> OVER 17-8 (68%) on graded lines; the Elo model added nothing (5-6). PAPER.
+            print("%-34s %5.1f  DROP-OVER (opened %.1f)  dropped totals graded 17-8 -- paper, Monday review | %s" % (
+                (" + ".join(A) + " v " + " + ".join(B))[:34], L, opened, t))
         if disc is None:                                   # PP doesn't say the discipline: the one where both sides resolve uniquely
             opts = (("MS", "WS") if len(A) == 1 else ("MD", "WD", "XD"))
             ok = [d_ for d_ in opts if find(R, d_, A) and find(R, d_, B)]
