@@ -167,6 +167,8 @@ MERGE_KEYS = {
     "calls_log.jsonl": lambda r: (r.get("sport"), r.get("date"), r.get("player"), r.get("stat"), r.get("line"), r.get("call"), r.get("venue"), r.get("logged")),
     "raised_paper.jsonl": lambda r: r.get("proj_id"),
     "soccer_card.jsonl": lambda r: (r.get("day"), r.get("logged")),
+    "tennis_card.jsonl": lambda r: (r.get("day"), r.get("logged")),
+    "tennis_pp_paper.jsonl": lambda r: (r.get("pid"), r.get("logged")),
     "kalshi_paper.jsonl": lambda r: (r.get("day"), r.get("player"), r.get("stat"), r.get("logged")),
     "prop_model_paper.jsonl": lambda r: (r.get("kind"), r.get("day"), r.get("player") or r.get("slip"), r.get("stat"), r.get("logged")),
     "dota_paper.jsonl": lambda r: (r.get("date"), r.get("player"), r.get("stat"), r.get("line"), r.get("side")),
