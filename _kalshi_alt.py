@@ -245,7 +245,8 @@ def grade():
                 b["result"] = "W" if win else "L"
                 b["net"] = round((1 - b["price"] - b["fee"]) if win else -(b["price"] + b["fee"]), 4); n += 1
     open(OUT, "w", encoding="utf-8").write("".join(json.dumps(b) + "\n" for b in B))
-    G = [b for b in B if b.get("result") in ("W", "L")]
+    G = [b for b in B if b.get("result") in ("W", "L") and not (b["kind"] == "PROP" and "p_sharp" not in b)]   # 22 props from the first 11/24
+                                                                         # run were picked off sharp books, before the switch to our numbers
     print("graded %d new; total %d settled, %d open" % (n, len(G), len(B) - len(G)))
     sl = {"ML": lambda b: b["kind"] == "ML", "TOTAL": lambda b: b["kind"] == "TOTAL", "SPREAD": lambda b: b["kind"] == "SPREAD",
           "PROP": lambda b: b["kind"] == "PROP", "edge1-2": lambda b: b["edge"] < .02, "edge2-3": lambda b: .02 <= b["edge"] < .03,
