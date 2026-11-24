@@ -36,7 +36,7 @@ def open_legs(today):
             sp = next((s for s in ("NBA", "NHL") if s in sport), None)
             if sp and x.get("player") and x.get("line") is not None:
                 tagl = (r.get("system_tag") or "").lower()
-                promo = "taco" in tagl and (x.get("note") == "TACO" or x["player"].split()[-1].lower() in tagl)
+                promo = any(w in (x.get("note") or "").upper() for w in ("TACO", "GIMME", "FLASH")) or                     ("taco" in tagl and x["player"].split()[-1].lower() in tagl)          # 11/24: gimme/flash legs sit off the standard too
                 out.append(dict(sp=sp, player=x["player"], stat=x.get("stat"), line=float(x["line"]), side=(x.get("side") or "").lower(), promo=promo,
                                 slip="%s %s" % (r.get("market", "")[:20], r.get("stake"))))
     return out
