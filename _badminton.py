@@ -321,8 +321,12 @@ def price():
         opened = FIRST.get((row[6], stat, row[7])) if len(row) > 7 else None
         if stat == "Total Points" and opened is not None and L < opened:
             # 11/24 backtest: PP lowered a TOTAL overnight -> OVER 17-8 (68%) on graded lines; the Elo model added nothing (5-6). PAPER.
-            print("%-34s %5.1f  DROP-OVER (opened %.1f)  dropped totals graded 17-8 -- paper, Monday review | %s" % (
+            print("%-34s %5.1f  DROP-OVER (opened %.1f)  dropped totals graded 19-10 -- paper, Monday review | %s" % (
                 (" + ".join(A) + " v " + " + ".join(B))[:34], L, opened, t))
+        elif stat == "Total Points" and opened is not None and L >= opened:
+            # 11/25: the mirror -- totals PP did NOT lower went UNDER 32-20 (62%); the 11/24-25 night's tailed 6-pick was 6 of these. PAPER.
+            print("%-34s %5.1f  HOLD-UNDER (never dropped)  unchanged totals graded 32-20 under -- paper; only final within ~1h of start | %s" % (
+                (" + ".join(A) + " v " + " + ".join(B))[:34], L, t))
         if disc is None:                                   # PP doesn't say the discipline: the one where both sides resolve uniquely
             opts = (("MS", "WS") if len(A) == 1 else ("MD", "WD", "XD"))
             ok = [d_ for d_ in opts if find(R, d_, A) and find(R, d_, B)]
