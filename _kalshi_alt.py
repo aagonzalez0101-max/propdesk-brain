@@ -265,7 +265,7 @@ def run():
     if os.environ.get("DRYRUN"):
         print("(dry run: not logged)"); return
     with open(OUT, "a", encoding="utf-8") as f:
-        f.write("".join(json.dumps(b) + "\n" for b in bets))
+        f.write("".join(json.dumps(b) + "\n" for b in bets + combos))      # 11/25 fix: combos were printed but never saved
 
 
 def grade():
