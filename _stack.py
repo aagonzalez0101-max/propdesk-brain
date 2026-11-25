@@ -25,8 +25,11 @@ nn = lambda s: re.sub(r"[^a-z]", "", unicodedata.normalize("NFKD", s or "").enco
 STATS = {"Points": "pts", "Rebounds": "reb", "Assists": "ast", "Pts+Rebs+Asts": "pts+reb+ast", "Pts+Rebs": "pts+reb", "Pts+Asts": "pts+ast",
          "Rebs+Asts": "reb+ast", "3-PT Made": "tpm", "Blocked Shots": "blk", "Steals": "stl", "Blks+Stls": "blk+stl", "Turnovers": "tov",
          "FG Made": "fgm", "FG Attempted": "fga", "Free Throws Made": "ftm", "Offensive Rebounds": "oreb", "Defensive Rebounds": "dreb",
-         "Fantasy Score": "pts+1.2*reb+1.5*ast+3*blk+3*stl-tov"}
-COLS = ["pts", "reb", "ast", "tpm", "blk", "stl", "tov", "fgm", "fga", "ftm", "oreb", "dreb"]
+         "Fantasy Score": "pts+1.2*reb+1.5*ast+3*blk+3*stl-tov",
+         # 11/24 user: "add all these little picks ... large volume to choose from" -- every PP NBA stat the box score can grade
+         "3-PT Attempted": "tpa", "Two Pointers Attempted": "fga-tpa", "Two Pointers Made": "fgm-tpm", "Free Throws Attempted": "fta",
+         "Personal Fouls": "pf"}
+COLS = ["pts", "reb", "ast", "tpm", "blk", "stl", "tov", "fgm", "fga", "ftm", "oreb", "dreb", "tpa", "fta", "pf"]
 NHL_STATS = {"Shots On Goal": "sog", "Points": "points", "Assists": "assists", "Goals": "goals", "Hits": "hits", "Blocked Shots": "blocks"}
 NHL_COLS = ["sog", "points", "assists", "goals", "hits", "blocks"]
 stats_for = lambda sp: NHL_STATS if sp == "nhl" else STATS
