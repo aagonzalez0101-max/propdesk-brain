@@ -201,10 +201,10 @@ def injuries():
         return {}
 
 
-COMBO_MIN_P, COMBO_MAX_P, COMBO_PAY, COMBO_EDGE, COMBO_MAX = .65, .85, (1.8, 4.0), .02, 8   # user: "3-5 legs at 65-85% ... anything over 1.8x"
+COMBO_MIN_P, COMBO_MAX_P, COMBO_PAY, COMBO_EDGE, COMBO_MAX = .65, .85, (1.8, 8.0), .02, 10   # user: "3-5 legs at 65-85% ... anything over 1.8x"
 
 
-def build_combos(pool, done, now):
+def build_combos(pool, done, now, pay=None, edge=None, style="value", used=None):
     """11/24 user: "I'd take like 70 and 80% ... until they are like 2x or close to it, even a 1.6x". Legs our number has at 70%+ and
     priced at or under it; 2-3 legs from DIFFERENT games; cost = product of (ask + fee) per leg (= buying leg 1 and rolling the $1 into
     leg 2), pays $1 -> payout 1/cost. Keep 1.55x-2.3x with (our combined chance - cost) >= 2 pts; each leg used once; best 8 a run."""
@@ -216,15 +216,16 @@ def build_combos(pool, done, now):
             if len({l["game"] for l in c}) < k:
                 continue
             cost = math.prod(l["price"] + l["fee"] for l in c); p = math.prod(l["p"] for l in c)
-            if COMBO_PAY[0] <= 1 / cost <= COMBO_PAY[1] and p - cost >= COMBO_EDGE:
+            pay_ = pay or COMBO_PAY; edge_ = COMBO_EDGE if edge is None else edge
+            if pay_[0] <= 1 / cost <= pay_[1] and p - cost >= edge_:
                 cand.append((p - cost, c, cost, p))
-    out, used = [], set()
+    out = []; used = set() if used is None else used
     for e, c, cost, p in sorted(cand, key=lambda x: -x[0]):
         key = "+".join(sorted("%s:%s" % (l["ticker"], l["side"]) for l in c))
         if any(l["ticker"] in used for l in c) or ("COMBO:" + key) in done:
             continue
         used |= {l["ticker"] for l in c}
-        out.append(dict(ts=now.isoformat(timespec="seconds"), day=now.strftime("%Y-%m-%d"), kind="COMBO", ticker="COMBO:" + key,
+        out.append(dict(ts=now.isoformat(timespec="seconds"), day=now.strftime("%Y-%m-%d"), kind="COMBO", style=style, ticker="COMBO:" + key,
                         desc=" + ".join(l["desc"] for l in c), side="all", price=round(cost, 4), fee=0, p=round(p, 3), edge=round(e, 3),
                         legs=[{k2: l[k2] for k2 in ("ticker", "side", "desc", "price", "fee", "p")} for l in c], result=None))
         if len(out) == COMBO_MAX:
@@ -244,7 +245,7 @@ def run():
         except Exception as e:
             print("  %s: %s" % (sp, str(e)[:80]))
     OWN = own_rates(); INJ = injuries()
-    bets, seen, pool = [], 0, []
+    bets, seen, pool, safe = [], 0, [], []
     for c in C:
         sport, c = c[0], c[1:]
         kind, m, desc, pf = c[:4]
@@ -291,6 +292,8 @@ def run():
                        game=m["event_ticker"].split("-", 1)[1][:13])
             if COMBO_MIN_P <= p <= COMBO_MAX_P and ask <= .92:
                 pool.append(leg)                                  # 11/24 user: 70-80% legs stacked to ~1.6-2x
+            if .70 <= ask <= .88 and e >= 0:
+                safe.append(leg)                                  # 11/25 user: "parlays that mix some 70-80% legs" -- the MARKET says 70-88%
             if e >= (EDGE_PROP if kind == "PROP" else EDGE):
                 bets.append(leg)
             break
@@ -304,7 +307,9 @@ def run():
     props = sorted([b for b in best.values() if b["kind"] == "PROP"], key=lambda b: -b["edge"])
     gm = sorted([b for b in best.values() if b["kind"] != "PROP"], key=lambda b: -b["edge"])
     bets = props[:MAX_BETS - min(len(gm), MAX_BETS * 2 // 5)] + gm[:MAX_BETS * 2 // 5]   # 60 props + 40 game-market bets
-    combos = build_combos(pool, done, now)
+    used = set()
+    combos = build_combos(safe, done, now, pay=(1.8, 3.0), edge=.01, style="safe", used=used)     # legs priced 70-88c: ~1.8-3x
+    combos += build_combos(pool, done, now, style="value", used=used)                             # our 65-85% legs priced lower: 4-8x
     for i, b in enumerate(sorted(bets, key=lambda b: -b["edge"])[:TOP_N], 1):
         b["rank"] = i                                            # the ranked shortlist, graded on its own (TOP10)
     for i, c in enumerate(combos[:TOP_COMBOS], 1):
@@ -362,6 +367,8 @@ def grade():
           "edge3+": lambda b: b["edge"] >= .03 and b["kind"] != "COMBO",
           "TOP10 legs": lambda b: b["kind"] != "COMBO" and (b.get("rank") or 99) <= 10,
           "TOP5 combos": lambda b: b["kind"] == "COMBO" and (b.get("rank") or 99) <= 5,
+          "COMBO safe 70-88c legs": lambda b: b["kind"] == "COMBO" and b.get("style") == "safe",
+          "COMBO value 4-8x": lambda b: b["kind"] == "COMBO" and b.get("style", "value") == "value",
           "NBA": lambda b: b.get("sport", "NBA") == "NBA" and b["kind"] != "COMBO", "NHL": lambda b: b.get("sport") == "NHL" and b["kind"] != "COMBO",
           "NFL": lambda b: b.get("sport") == "NFL" and b["kind"] != "COMBO", "CBB": lambda b: b.get("sport") == "CBB" and b["kind"] != "COMBO",
           "PROP sharp-ok": lambda b: b["kind"] == "PROP" and b.get("p_sharp") is not None and b["p_sharp"] >= b["price"] + b["fee"],
