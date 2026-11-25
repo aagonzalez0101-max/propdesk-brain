@@ -29,6 +29,16 @@ OUT = "kalshi_alt_paper.jsonl"
 EDGE_PROP = .05                                     # our own-rate number is noisier than a sharp line -> bigger cushion
 EDGE, LO, HI, MAXSPR = .01, .08, .92, .10   # log from +1 pt (volume); grade by edge bucket to find the real cutoff
 SD_TOT, SD_MAR = 18.5, 13.0
+# 11/25 user: "i want other sports in there ... we start kalshi next week monday" -- same engine, per-sport config.
+# sd = spread of the full-game total / margin around Pinnacle's number (normal approx; NHL is discrete, so rougher).
+SPORTS = {"NBA": dict(pin=487, game="KXNBAGAME", tot="KXNBATOTAL", spr="KXNBASPREAD", sd_tot=18.5, sd_mar=13.0),
+          "NHL": dict(pin=1456, game="KXNHLGAME", tot="KXNHLTOTAL", spr="KXNHLSPREAD", sd_tot=2.2, sd_mar=2.4),
+          "NFL": dict(pin=889, game="KXNFLGAME", tot="KXNFLTOTAL", spr="KXNFLSPREAD", sd_tot=13.5, sd_mar=13.5),
+          "CBB": dict(pin=493, game="KXNCAAMBGAME", tot="KXNCAAMBTOTAL", spr="KXNCAAMBSPREAD", sd_tot=16.0, sd_mar=11.0)}
+NHL_PROPS = {"KXNHLPTS": "nhl points", "KXNHLGOAL": "nhl goals", "KXNHLAST": "nhl assists"}
+NHL_KEY = {"nhl points": "points", "nhl goals": "goals", "nhl assists": "assists"}
+MAX_BETS = 100
+TOP_N, TOP_COMBOS = 10, 5                                  # user: "the top 5-10 ranked legs like we do on pp, same with parlays"
 PROPS = {"KXNBAPTS": "points", "KXNBAREB": "rebounds", "KXNBAAST": "assists", "KXNBA3PT": "threes made", "KXNBAPRA": "pts & rebs & asts"}
 BOX = {"points": "pts", "rebounds": "reb", "assists": "ast", "threes made": "fg3m", "pts & rebs & asts": "pts+reb+ast"}
 
@@ -60,10 +70,10 @@ def kmarkets(series):
     return get("%s/markets?series_ticker=%s&status=open&limit=1000" % (KAL, series)).get("markets", [])
 
 
-def pin_games():
+def pin_games(league=487):
     H = {"X-API-Key": PIN_KEY}
-    mus = get("%s/0.1/leagues/487/matchups" % PIN, H) or []
-    mk = get("%s/0.1/leagues/487/markets/straight" % PIN, H) or []
+    mus = get("%s/0.1/leagues/%d/matchups" % (PIN, league), H) or []
+    mk = get("%s/0.1/leagues/%d/markets/straight" % (PIN, league), H) or []
     G = {}
     for u in mus:
         if u.get("parentId") or u.get("type") != "matchup":
@@ -96,11 +106,12 @@ def city_match(city, team):
     return t.startswith(c) or c in t or (c == "la" and t.startswith("los angeles"))
 
 
-def candidates():
-    """-> rows (kind, ticker, desc, yes_fair, market) for every priced Kalshi rung"""
+def candidates(sport="NBA"):
+    """-> rows (kind, market, desc, yes_fair, name, canon, start) for every priced Kalshi rung of one sport"""
+    cf = SPORTS[sport]; sd_tot, sd_mar = cf["sd_tot"], cf["sd_mar"]
     out = []
-    games = pin_games()
-    ml = kmarkets("KXNBAGAME")
+    games = pin_games(cf["pin"])
+    ml = kmarkets(cf["game"])
     ev = {}                                                  # event code -> {city: team}, from the ML markets
     for m in ml:
         code = m["event_ticker"].split("-", 1)[1]
@@ -116,19 +127,28 @@ def candidates():
             city = m.get("yes_sub_title") or ""
             p = g["ml"][0] if city_match(city, g["home"]) else g["ml"][1]
             out.append(("ML", m, "%s wins" % city, p, None, None, g["start"]))
-    for m in kmarkets("KXNBATOTAL"):
+    for m in kmarkets(cf["tot"]):
         g = game_for(m["event_ticker"].split("-", 1)[1])
         if g and g.get("total") and m.get("floor_strike") is not None:
-            T, po = g["total"]; mu = T + SD_TOT * zinv(po)
-            out.append(("TOTAL", m, "%s v %s over %s" % (g["away"], g["home"], m["floor_strike"]), 1 - Phi((m["floor_strike"] - mu) / SD_TOT), None, None, g["start"]))
-    for m in kmarkets("KXNBASPREAD"):
+            T, po = g["total"]; mu = T + sd_tot * zinv(po)
+            out.append(("TOTAL", m, "%s v %s over %s" % (g["away"], g["home"], m["floor_strike"]), 1 - Phi((m["floor_strike"] - mu) / sd_tot), None, None, g["start"]))
+    for m in kmarkets(cf["spr"]):
         g = game_for(m["event_ticker"].split("-", 1)[1])
         if g and g.get("spread_home") and m.get("floor_strike") is not None:
             city = re.match(r"(.+?) wins by", m["title"]); city = city.group(1) if city else ""
             line, pc = g["spread_home"]
-            mu_home = -line + SD_MAR * zinv(pc)                 # expected home margin
+            mu_home = -line + sd_mar * zinv(pc)                 # expected home margin
             mu = mu_home if city_match(city, g["home"]) else -mu_home
-            out.append(("SPREAD", m, m["title"], 1 - Phi((m["floor_strike"] - mu) / SD_MAR), None, None, g["start"]))
+            out.append(("SPREAD", m, m["title"], 1 - Phi((m["floor_strike"] - mu) / sd_mar), None, None, g["start"]))
+    if sport == "NHL":                                         # NHL props: our own rates only (no sharp comparison wired)
+        for ser, canon in NHL_PROPS.items():
+            for m in kmarkets(ser):
+                if m.get("strike_type") == "greater" and m.get("floor_strike") is not None:
+                    g = game_for(m["event_ticker"].split("-", 1)[1]); name = m["title"].split(":")[0]
+                    if g:
+                        out.append(("PROP", m, "%s %s %s+" % (name, canon.split()[1], int(m["floor_strike"] + .5)), None, name, canon, g["start"]))
+    if sport != "NBA":
+        return out
     # props: sharp books at Kalshi's rung
     import _xcheck as X, _mismatch as M
     S = {}
@@ -156,7 +176,21 @@ def own_rates():
     for p, pts, reb, ast, fg3m, mn in c.execute("select b.player,b.pts,b.reb,b.ast,b.tpm,b.min from nba_box b join nba_games g on g.game_id=b.game_id "
                                                 "where g.season='2026-27' and g.stype='regular' and b.min>0 order by g.date"):
         R.setdefault(p.lower(), []).append(dict(pts=pts or 0, reb=reb or 0, ast=ast or 0, fg3m=fg3m or 0, mn=mn or 0))
+    import _stack as S2                                       # NHL: player_games, keyed like _stack (first initial + last name)
+    for p, st in c.execute("select player, stats from player_games where sport='NHL' and date>='2026-10-01' order by date"):
+        j = json.loads(st)
+        if j.get("gtype") == "reg":
+            R.setdefault("nhl:" + S2.pkey("nhl", p), []).append({k: float(j.get(k) or 0) for k in ("points", "goals", "assists")})
     return R
+
+
+def own_list(OWN, name, canon):
+    """-> (values for this stat, minutes or None): NBA by full name, NHL by initial+last"""
+    if canon in NHL_KEY:
+        import _stack as S2
+        return [x[NHL_KEY[canon]] for x in OWN.get("nhl:" + S2.pkey("nhl", name), [])], None
+    g = OWN.get(name.lower(), [])
+    return [sum(x[k] for k in BOX[canon].split("+")) for x in g], [x["mn"] for x in g]
 
 
 def injuries():
@@ -203,16 +237,22 @@ def run():
     done = set()
     if os.path.exists(OUT):
         done = {(json.loads(l)["ticker"]) for l in open(OUT, encoding="utf-8") if l.strip()}
-    C = candidates(); OWN = own_rates(); INJ = injuries()
+    C = []
+    for sp in SPORTS:
+        try:
+            C += [(sp,) + tuple(c) for c in candidates(sp)]
+        except Exception as e:
+            print("  %s: %s" % (sp, str(e)[:80]))
+    OWN = own_rates(); INJ = injuries()
     bets, seen, pool = [], 0, []
     for c in C:
+        sport, c = c[0], c[1:]
         kind, m, desc, pf = c[:4]
         p_sharp = pf if kind == "PROP" else None
         if kind == "PROP":                                    # OUR fair: shrunk season hit rate at the rung (+ checks below)
-            g = OWN.get(c[4].lower(), [])
-            if len(g) < 8:
+            v, _ = own_list(OWN, c[4], c[5])
+            if len(v) < 8:
                 continue
-            v = [sum(x[k] for k in BOX[c[5]].split("+")) for x in g]
             pf = (sum(x > m["floor_strike"] for x in v) + 2) / (len(v) + 4)
         if m["ticker"] in done or pf is None:
             continue
@@ -232,13 +272,12 @@ def run():
                 name, canon = c[4], c[5]
                 if INJ.get(name.lower()) in ("out", "doubtful", "questionable"):
                     continue
-                g = OWN[name.lower()]
-                v = [sum(x[k] for k in BOX[canon].split("+")) for x in g]
+                v, mins = own_list(OWN, name, canon)
                 l10 = [x > m["floor_strike"] for x in v[-10:]]
                 l10s = sum(l10) / len(l10) if side == "yes" else 1 - sum(l10) / len(l10)
                 if l10s < .5:                                     # last 10 must agree with the side
                     continue
-                mins = [x["mn"] for x in g]; tr = (sum(mins[-3:]) / 3) / (sum(mins) / len(mins))
+                tr = (sum(mins[-3:]) / 3) / (sum(mins) / len(mins)) if mins else 1.0
                 if side == "yes" and tr < .90:                    # YES needs his minutes holding
                     continue
                 if side == "no" and tr >= 1.15:                   # 11/23 rule: no unders while minutes are rising
@@ -246,7 +285,7 @@ def run():
                 why = "season %d/%d, L10 %d/10, min %.0f%%%s" % (sum(x > m["floor_strike"] for x in v) if side == "yes" else sum(x <= m["floor_strike"] for x in v),
                       len(v), round(10 * l10s) if len(l10) == 10 else round(len(l10) * l10s), 100 * tr,
                       ", sharp %.0f%%" % (100 * (p_sharp if side == "yes" else 1 - p_sharp)) if p_sharp is not None else "")
-            leg = dict(ts=now.isoformat(timespec="seconds"), day=now.strftime("%Y-%m-%d"), kind=kind, ticker=m["ticker"], desc=desc,
+            leg = dict(ts=now.isoformat(timespec="seconds"), day=now.strftime("%Y-%m-%d"), sport=sport, kind=kind, ticker=m["ticker"], desc=desc,
                        side=side, price=ask, fee=fee(ask), p=round(p, 3), edge=round(e, 3), close=m["close_time"], why=why, result=None,
                        p_sharp=(round(p_sharp if side == "yes" else 1 - p_sharp, 3) if p_sharp is not None else None),
                        game=m["event_ticker"].split("-", 1)[1][:13])
@@ -255,11 +294,30 @@ def run():
             if e >= (EDGE_PROP if kind == "PROP" else EDGE):
                 bets.append(leg)
             break
+    # 11/25: 4 sports -> 600+ rungs clear; a ladder of rungs on one player/game is one bet repeated. Keep the best rung per
+    # player-stat (props) / per game and market (totals, spreads), then the top MAX_BETS by edge (user: "same number of bets").
+    best = {}
+    for b in bets:
+        g = (b["sport"], b["kind"], b["game"], b["desc"].rsplit(" ", 1)[0] if b["kind"] == "PROP" else b["kind"])
+        if g not in best or b["edge"] > best[g]["edge"]:
+            best[g] = b
+    props = sorted([b for b in best.values() if b["kind"] == "PROP"], key=lambda b: -b["edge"])
+    gm = sorted([b for b in best.values() if b["kind"] != "PROP"], key=lambda b: -b["edge"])
+    bets = props[:MAX_BETS - min(len(gm), MAX_BETS * 2 // 5)] + gm[:MAX_BETS * 2 // 5]   # 60 props + 40 game-market bets
     combos = build_combos(pool, done, now)
+    for i, b in enumerate(sorted(bets, key=lambda b: -b["edge"])[:TOP_N], 1):
+        b["rank"] = i                                            # the ranked shortlist, graded on its own (TOP10)
+    for i, c in enumerate(combos[:TOP_COMBOS], 1):
+        c["rank"] = i
     print("KALSHI ALT PAPER %s: %d rungs priced, %d bets (edge >= %.0f pts after fee), %d combos" % (now.strftime("%m-%d %H:%M"), seen, len(bets), 100 * EDGE, len(combos)))
     for c in combos:
         print("  COMBO %.2fx  cost %.0fc  ours %.0f%%  edge +%.1f  | %s" % (1 / c["price"], 100 * c["price"], 100 * c["p"], 100 * c["edge"],
               " + ".join("%s %s@%.0f" % (l["desc"][:30], l["side"].upper(), 100 * l["price"]) for l in c["legs"])))
+    import collections
+    print("  mix: " + ", ".join("%s %s %d" % (k[0], k[1], v) for k, v in sorted(collections.Counter((b["sport"], b["kind"]) for b in bets).items())))
+    print("  TOP %d LEGS (ranked by edge):" % TOP_N)
+    for b in sorted([b for b in bets if b.get("rank")], key=lambda b: b["rank"]):
+        print("   #%-2d %s %-6s %-44s %s @ %.2f  ours %.0f%%  edge +%.1f" % (b["rank"], b["sport"], b["kind"], b["desc"][:44], b["side"].upper(), b["price"], 100 * b["p"], 100 * b["edge"]))
     for b in sorted(bets, key=lambda b: -b["edge"])[:40]:
         print("  %-6s %-46s %-3s @ %.2f (+%.2f fee)  fair %.0f%%  edge +%.1f  %s" % (b["kind"], b["desc"][:46], b["side"].upper(), b["price"], b["fee"], 100 * b["p"], 100 * b["edge"], b["why"]))
     if os.environ.get("DRYRUN"):
@@ -302,6 +360,10 @@ def grade():
     sl = {"ML": lambda b: b["kind"] == "ML", "TOTAL": lambda b: b["kind"] == "TOTAL", "SPREAD": lambda b: b["kind"] == "SPREAD",
           "PROP": lambda b: b["kind"] == "PROP", "COMBO": lambda b: b["kind"] == "COMBO", "edge1-2": lambda b: b["edge"] < .02, "edge2-3": lambda b: .02 <= b["edge"] < .03,
           "edge3+": lambda b: b["edge"] >= .03 and b["kind"] != "COMBO",
+          "TOP10 legs": lambda b: b["kind"] != "COMBO" and (b.get("rank") or 99) <= 10,
+          "TOP5 combos": lambda b: b["kind"] == "COMBO" and (b.get("rank") or 99) <= 5,
+          "NBA": lambda b: b.get("sport", "NBA") == "NBA" and b["kind"] != "COMBO", "NHL": lambda b: b.get("sport") == "NHL" and b["kind"] != "COMBO",
+          "NFL": lambda b: b.get("sport") == "NFL" and b["kind"] != "COMBO", "CBB": lambda b: b.get("sport") == "CBB" and b["kind"] != "COMBO",
           "PROP sharp-ok": lambda b: b["kind"] == "PROP" and b.get("p_sharp") is not None and b["p_sharp"] >= b["price"] + b["fee"],
           "PROP sharp-no": lambda b: b["kind"] == "PROP" and b.get("p_sharp") is not None and b["p_sharp"] < b["price"] + b["fee"],
           "ALL": lambda b: True}
