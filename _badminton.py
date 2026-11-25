@@ -327,7 +327,7 @@ def price():
             single, dropped = len(A) == 1, L < opened
             tag = None
             if single and not dropped:
-                tag = "SINGLES-UNDER (graded 20-9; final ~1h before start)"
+                tag = "SINGLES-UNDER (graded 20-9; take the OPENING number early -- lines only step down, an under wants the high one)"
             elif not single and dropped:
                 tag = "DOUBLES DROP-OVER (opened %.1f; graded 12-4)" % opened
             if tag:
