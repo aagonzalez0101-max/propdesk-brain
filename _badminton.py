@@ -319,14 +319,19 @@ def price():
     for row in board:
         disc, A, B, L, t = row[:5]; stat = row[5] if len(row) > 5 else "Total Points"
         opened = FIRST.get((row[6], stat, row[7])) if len(row) > 7 else None
-        if stat == "Total Points" and opened is not None and L < opened:
-            # 11/24 backtest: PP lowered a TOTAL overnight -> OVER 17-8 (68%) on graded lines; the Elo model added nothing (5-6). PAPER.
-            print("%-34s %5.1f  DROP-OVER (opened %.1f)  dropped totals graded 19-10 -- paper, Monday review | %s" % (
-                (" + ".join(A) + " v " + " + ".join(B))[:34], L, opened, t))
-        elif stat == "Total Points" and opened is not None and L >= opened:
-            # 11/25: the mirror -- totals PP did NOT lower went UNDER 32-20 (62%); the 11/24-25 night's tailed 6-pick was 6 of these. PAPER.
-            print("%-34s %5.1f  HOLD-UNDER (never dropped)  unchanged totals graded 32-20 under -- paper; only final within ~1h of start | %s" % (
-                (" + ".join(A) + " v " + " + ".join(B))[:34], L, t))
+        if stat == "Total Points" and opened is not None:
+            # 11/25 (164 graded PP totals) -- the line move only means something BY DISCIPLINE:
+            #   SINGLES, line not dropped -> UNDER 20-9 (69%)   (the tailed $1,000 6-pick 11/24-25 = six of these, all hit)
+            #   DOUBLES, line dropped     -> OVER 12-4 (75%)
+            #   singles dropped 6-7, doubles unchanged 12-12 -> pass.  PAPER until the Monday review.
+            single, dropped = len(A) == 1, L < opened
+            tag = None
+            if single and not dropped:
+                tag = "SINGLES-UNDER (graded 20-9; final ~1h before start)"
+            elif not single and dropped:
+                tag = "DOUBLES DROP-OVER (opened %.1f; graded 12-4)" % opened
+            if tag:
+                print("%-34s %5.1f  %s -- paper | %s" % ((" + ".join(A) + " v " + " + ".join(B))[:34], L, tag, t))
         if disc is None:                                   # PP doesn't say the discipline: the one where both sides resolve uniquely
             opts = (("MS", "WS") if len(A) == 1 else ("MD", "WD", "XD"))
             ok = [d_ for d_ in opts if find(R, d_, A) and find(R, d_, B)]
