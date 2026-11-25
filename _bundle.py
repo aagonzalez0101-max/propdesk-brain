@@ -311,7 +311,20 @@ def put(files):
         if now and now["updated_at"] != a["updated_at"]:          # the cloud uploaded meanwhile -> redo on its copy
             os.remove(bp); print("cloud uploaded during put -- retrying"); time.sleep(20); continue
         api("https://api.github.com/repos/%s/releases/assets/%d" % (REPO, a["id"]), "DELETE")
-        res = api(rel["upload_url"].split("{")[0] + "?name=" + ASSET, "POST", open(bp, "rb").read(), "application/gzip")
+        # 11/25: GitHub answered 500 after the DELETE -> the cloud sat with NO bundle until a manual re-upload. Retry hard; a 500 can
+        # still land, so check for the asset (same size) before trying again; never delete the local pack unless the asset is there.
+        size = os.path.getsize(bp)
+        for i in range(6):
+            try:
+                res = api(rel["upload_url"].split("{")[0] + "?name=" + ASSET, "POST", open(bp, "rb").read(), "application/gzip")
+                break
+            except Exception as e:
+                print("upload try %d: %s" % (i + 1, e)); time.sleep(30)
+                landed = remote_asset(release())
+                if landed and landed.get("size") == size and landed.get("state") == "uploaded":
+                    res = landed; break
+        else:
+            raise SystemExit("UPLOAD FAILED AFTER DELETE -- the cloud has no bundle. Re-upload %s now (kept on disk)." % bp)
         os.remove(bp)
         print("put %s into the cloud bundle (%s)" % (", ".join(files), res["updated_at"]))
         return
