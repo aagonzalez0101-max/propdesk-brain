@@ -71,7 +71,7 @@ def build(tomorrow=False):
     t = lambda r: datetime.datetime.fromisoformat(r["start"]).astimezone(CT).strftime("%I:%M %p").lstrip("0")
     body = "\n".join("%s U%g %s -- model %.0f%% (%s v %s, %s CT)" % (r["player"], r["line"], r["stat"], 100 * r["p"], r.get("team"), r.get("opp"), t(r)) for r in legs)
     head = "**SOCCER 2-PICK %s ($%d)** -- separate from the NBA plan\n" % (day, stake)
-    note = "\n_shots/dribble unders: one slip/day backtest 16/36 cashed, +33%% ROI (n small); legs 62.7%%_"
+    note = "\n_shots/dribble unders: one slip/day backtest 16/36 cashed, +33% ROI (n small); legs 62.7%_"
     if why:
         note += "\n_skipped (line moved/pulled): " + "; ".join(why[:4]) + "_"
     print(head + body + note)
