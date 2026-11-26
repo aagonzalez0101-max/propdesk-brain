@@ -319,6 +319,9 @@ def price():
     for row in board:
         disc, A, B, L, t = row[:5]; stat = row[5] if len(row) > 5 else "Total Points"
         opened = FIRST.get((row[6], stat, row[7])) if len(row) > 7 else None
+        if stat.startswith("1st Game") and opened is not None and opened >= 37.5:
+            # 11/26: capper's all-1st-game-unders hit. Graded opening >= 37.5: under 28-17 (62%) but 20-15 (57%) before 11/25. PAPER.
+            print("%-34s %5.1f  G1-UNDER (opened %.1f >= 37.5; graded 28-17, one hot night) -- paper | %s" % ((" + ".join(A) + " v " + " + ".join(B))[:34], L, opened, t))
         if stat == "Total Points" and opened is not None:
             # 11/25 (164 graded PP totals) -- the line move only means something BY DISCIPLINE:
             #   SINGLES, line not dropped -> UNDER 20-9 (69%)   (the tailed $1,000 6-pick 11/24-25 = six of these, all hit)
