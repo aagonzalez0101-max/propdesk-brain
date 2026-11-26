@@ -307,6 +307,15 @@ def run():
     props = sorted([b for b in best.values() if b["kind"] == "PROP"], key=lambda b: -b["edge"])
     gm = sorted([b for b in best.values() if b["kind"] != "PROP"], key=lambda b: -b["edge"])
     bets = props[:MAX_BETS - min(len(gm), MAX_BETS * 2 // 5)] + gm[:MAX_BETS * 2 // 5]   # 60 props + 40 game-market bets
+    # PILOT RULE, pre-declared 11/26 (candidate for live): price 35-59c, edge 3-10 pts, max 5 a day. Found by slicing 11/24-25
+    # (68 bets, +19% / +10%, 68 events, t about 1.1 -- NOT proven); every pick from today on is out-of-sample.
+    had = 0
+    if os.path.exists(OUT):
+        had = sum(1 for l in open(OUT, encoding="utf-8") if l.strip() and json.loads(l).get("pilot") and json.loads(l)["day"] == now.strftime("%Y-%m-%d"))
+    for b in sorted(bets, key=lambda b: -b["edge"]):
+        if had < 5 and .35 <= b["price"] < .60 and .03 <= b["edge"] < .10:
+            b["pilot"] = True; had += 1
+            print("  PILOT  %s %s @ %.2f (+%.2f fee)  ours %.0f%%  edge +%.1f  closes %s" % (b["desc"][:50], b["side"].upper(), b["price"], b["fee"], 100 * b["p"], 100 * b["edge"], b["close"][:10]))
     used = set()
     combos = build_combos(safe, done, now, pay=(1.8, 3.0), edge=.01, style="safe", used=used)     # legs priced 70-88c: ~1.8-3x
     combos += build_combos(pool, done, now, style="value", used=used)                             # our 65-85% legs priced lower: 4-8x
@@ -365,6 +374,7 @@ def grade():
     sl = {"ML": lambda b: b["kind"] == "ML", "TOTAL": lambda b: b["kind"] == "TOTAL", "SPREAD": lambda b: b["kind"] == "SPREAD",
           "PROP": lambda b: b["kind"] == "PROP", "COMBO": lambda b: b["kind"] == "COMBO", "edge1-2": lambda b: b["edge"] < .02, "edge2-3": lambda b: .02 <= b["edge"] < .03,
           "edge3+": lambda b: b["edge"] >= .03 and b["kind"] != "COMBO",
+          "PILOT 35-59c e3-10": lambda b: bool(b.get("pilot")),
           "TOP10 legs": lambda b: b["kind"] != "COMBO" and (b.get("rank") or 99) <= 10,
           "TOP5 combos": lambda b: b["kind"] == "COMBO" and (b.get("rank") or 99) <= 5,
           "COMBO safe 70-88c legs": lambda b: b["kind"] == "COMBO" and b.get("style") == "safe",
