@@ -34,6 +34,13 @@ def period_scores():
     G = {}
     for y, f in PBP.items():
         d = pd.read_parquet(f, columns=COLS)
+        # 11/26 BUG FIX: a player with 0 first-half points never got an entry, so his zero games vanished -> 1H overs inflated (the
+        # "1H WR over 62.6%" rule) and 1Q unders deflated. Register everyone who passed, was targeted or ran in ANY quarter, at 0.
+        for r in d.itertuples(index=False):
+            for pid in (r.passer_player_id, r.receiver_player_id, r.rusher_player_id):
+                if isinstance(pid, str):
+                    k = (pid, r.game_id)
+                    S[k].update(team=r.posteam, opp=r.defteam, date=r.game_date, week=r.week, season=int(r.game_id[:4]))
         d = d[d.qtr <= 2]
         for r in d.itertuples(index=False):
             G[r.game_id] = (r.game_date, r.home_team, r.away_team, r.season_type, r.week)
